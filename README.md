@@ -56,27 +56,51 @@ Repeat on each machine, giving each a distinct `node_name`
 
 ## TrueNAS SCALE (Docker / Custom App)
 
-TrueNAS SCALE can't run the systemd installer, so use the prebuilt container.
-The image is published to GHCR by GitHub Actions
-(`ghcr.io/rudutoitnuhome/server-monitor:latest`) and bundles `lm-sensors` and
-`smartmontools`, so nothing is installed on the host.
+TrueNAS SCALE can't run the systemd installer, so use a container. The image
+bundles `lm-sensors` and `smartmontools`, so nothing is installed on the host.
 
-1. **Make the image pullable.** After the first GitHub Actions run, open the
-   package at `github.com/users/rudutoitnuhome/packages/container/server-monitor`
-   → *Package settings* → set visibility to **Public** (so TrueNAS can pull it
-   without registry credentials).
-2. **Create a config on a dataset**, e.g. `/mnt/<POOL>/apps/server-monitor/`,
-   and put your edited `config.yaml` there (copy from `config.example.yaml`,
-   set `node_name: truenas`). `chmod 600` it — it holds the MQTT password.
-3. **Install the app.** TrueNAS UI → **Apps → Discover Apps → Custom App →
-   Install via YAML**, and paste [`docker-compose.truenas.yml`](docker-compose.truenas.yml),
-   replacing `<POOL>` with your pool name.
+There are two ways to get the image. **Common to both:**
 
-The compose runs the container `privileged` with host `/dev` and `/sys` mounted
-so `smartctl` can read disk SMART data. CPU temps work too **if** the host has
-the relevant `hwmon`/`coretemp` modules loaded; disk temps work regardless.
-GPU temps are not available in this image (no NVIDIA runtime) — fine, since the
-NAS has no GPU.
+- **Config on a dataset**: create e.g. `/mnt/<POOL>/apps/server-monitor/` and
+  put your edited `config.yaml` there (copy from `config.example.yaml`, set
+  `node_name: truenas`). `chmod 600` it — it holds the MQTT password.
+- The compose runs the container `privileged` with host `/dev` and `/sys`
+  mounted so `smartctl` can read disk SMART data. CPU temps work too **if** the
+  host has the relevant `hwmon`/`coretemp` modules loaded; disk temps work
+  regardless. No GPU temps (no NVIDIA runtime) — fine, the NAS has no GPU.
+
+### Option A — build the image on TrueNAS (no registry needed)
+
+Works with no external dependencies. From a root shell on TrueNAS:
+
+```bash
+cd /mnt/<POOL>/apps
+git clone https://github.com/rudutoitnuhome/Server-monitoring.git
+cd Server-monitoring
+docker build -t server-monitor:local .
+```
+
+Then install the Custom App with
+[`docker-compose.truenas.yml`](docker-compose.truenas.yml), but change the image
+line to the locally-built one so Docker doesn't try to pull it:
+
+```yaml
+    image: server-monitor:local
+    pull_policy: never
+```
+
+### Option B — pull from GHCR (needs GitHub Actions working)
+
+The workflow publishes `ghcr.io/rudutoitnuhome/server-monitor:latest` on every
+push. After the first successful run, set the package visibility to **Public**
+(`github.com/users/rudutoitnuhome/packages/container/server-monitor` → *Package
+settings*) so TrueNAS can pull without credentials, then use the compose as-is.
+
+### Install the Custom App
+
+TrueNAS UI → **Apps → Discover Apps → Custom App → Install via YAML**, paste
+[`docker-compose.truenas.yml`](docker-compose.truenas.yml), and replace `<POOL>`
+with your pool name (plus the image tweak above if you built locally).
 
 Check logs from the app's shell or:
 
