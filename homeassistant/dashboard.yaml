@@ -1,0 +1,147 @@
+# Home Assistant dashboard for server_monitor temperatures.
+#
+# Uses only built-in cards (no HACS required) and the deterministic entity IDs
+# produced once the agent publishes object_id-based discovery (sensor.<node>_<key>).
+#
+# To use:
+#   Settings -> Dashboards -> (+ Add dashboard) -> New dashboard from scratch,
+#   then open it -> top-right pencil -> three-dot menu -> "Raw configuration
+#   editor" and paste everything below.
+#
+# Entity IDs assume node_names: Plex-Luthor, Moxxy-Proxxy, Truenasty.
+# If you rename a host, update the sensor.* ids to match.
+
+title: Servers
+views:
+  - title: Temperatures
+    path: temps
+    icon: mdi:thermometer
+    cards:
+
+      # ---------------- Plex-Luthor ----------------
+      - type: vertical-stack
+        cards:
+          - type: gauge
+            name: Plex-Luthor CPU
+            entity: sensor.plex_luthor_cpu_temp
+            unit: °C
+            min: 20
+            max: 90
+            needle: true
+            severity:
+              green: 0
+              yellow: 65
+              red: 80
+          - type: entities
+            title: Plex-Luthor
+            state_color: true
+            entities:
+              - entity: sensor.plex_luthor_cpu_temp
+                name: CPU
+              - entity: sensor.plex_luthor_disk_s6p6nj0w325302t_temp
+                name: NVMe (S6P6…25302T)
+          - type: history-graph
+            title: Plex-Luthor – 24h
+            hours_to_show: 24
+            entities:
+              - sensor.plex_luthor_cpu_temp
+              - sensor.plex_luthor_disk_s6p6nj0w325302t_temp
+
+      # ---------------- Moxxy-Proxxy ----------------
+      - type: vertical-stack
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU 0
+                entity: sensor.moxxy_proxxy_cpu0_temp
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity:
+                  green: 0
+                  yellow: 65
+                  red: 80
+              - type: gauge
+                name: CPU 1
+                entity: sensor.moxxy_proxxy_cpu1_temp
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity:
+                  green: 0
+                  yellow: 65
+                  red: 80
+          - type: entities
+            title: Moxxy-Proxxy
+            state_color: true
+            entities:
+              - entity: sensor.moxxy_proxxy_cpu0_temp
+                name: CPU 0
+              - entity: sensor.moxxy_proxxy_cpu1_temp
+                name: CPU 1
+              - entity: sensor.moxxy_proxxy_disk_wck474q3_temp
+                name: Disk WCK474Q3
+              - entity: sensor.moxxy_proxxy_disk_wck44pkz_temp
+                name: Disk WCK44PKZ
+          - type: history-graph
+            title: Moxxy-Proxxy – 24h
+            hours_to_show: 24
+            entities:
+              - sensor.moxxy_proxxy_cpu0_temp
+              - sensor.moxxy_proxxy_cpu1_temp
+              - sensor.moxxy_proxxy_disk_wck474q3_temp
+              - sensor.moxxy_proxxy_disk_wck44pkz_temp
+
+      # ---------------- Truenasty ----------------
+      - type: vertical-stack
+        cards:
+          - type: gauge
+            name: Truenasty CPU
+            entity: sensor.truenasty_cpu_temp
+            unit: °C
+            min: 20
+            max: 90
+            needle: true
+            severity:
+              green: 0
+              yellow: 65
+              red: 80
+          - type: entities
+            title: Truenasty
+            state_color: true
+            entities:
+              - entity: sensor.truenasty_cpu_temp
+                name: CPU
+              - type: section
+                label: Disks
+              - entity: sensor.truenasty_disk_7pkaw5hg_temp
+                name: Disk 7PKAW5HG
+              - entity: sensor.truenasty_disk_7pk85e1g_temp
+                name: Disk 7PK85E1G
+              - entity: sensor.truenasty_disk_7pk6p6gc_temp
+                name: Disk 7PK6P6GC
+              - entity: sensor.truenasty_disk_7gj310bk_temp
+                name: Disk 7GJ310BK
+              - entity: sensor.truenasty_disk_zrt0l5f80000w3257ek1_temp
+                name: Disk ZRT…57EK1
+              - entity: sensor.truenasty_disk_zrt0l58h0000w3257exa_temp
+                name: Disk ZRT…57EXA
+              - entity: sensor.truenasty_disk_zrt0l60a0000w325rr1p_temp
+                name: Disk ZRT…5RR1P
+              - entity: sensor.truenasty_disk_zrt0l66z0000w324ntt8_temp
+                name: Disk ZRT…4NTT8
+          - type: history-graph
+            title: Truenasty disks – 24h
+            hours_to_show: 24
+            entities:
+              - sensor.truenasty_disk_7pkaw5hg_temp
+              - sensor.truenasty_disk_7pk85e1g_temp
+              - sensor.truenasty_disk_7pk6p6gc_temp
+              - sensor.truenasty_disk_7gj310bk_temp
+              - sensor.truenasty_disk_zrt0l5f80000w3257ek1_temp
+              - sensor.truenasty_disk_zrt0l58h0000w3257exa_temp
+              - sensor.truenasty_disk_zrt0l60a0000w325rr1p_temp
+              - sensor.truenasty_disk_zrt0l66z0000w324ntt8_temp

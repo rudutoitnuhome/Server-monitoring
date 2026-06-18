@@ -462,6 +462,11 @@ class Publisher:
         topic = f"{self.discovery_prefix}/sensor/{object_id}/config"
         payload = {
             "name": reading.name,
+            # object_id pins the entity_id to sensor.<node>_<key> (deterministic
+            # and collision-free across hosts); has_entity_name groups the
+            # friendly name under the device.
+            "object_id": object_id,
+            "has_entity_name": True,
             "unique_id": f"server_monitor_{object_id}",
             "state_topic": self.state_topic,
             "availability_topic": self.avail_topic,
