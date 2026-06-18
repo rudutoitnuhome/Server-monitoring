@@ -29,20 +29,22 @@ homeassistant/sensor/<node>_<key>/config   (discovery payloads, retained)
 Linux with Python 3.9+. Install the sensor tools you need:
 
 ```bash
-# Proxmox / TrueNAS SCALE (Debian-based)
+# Proxmox (Debian-based)
 apt install lm-sensors smartmontools
 sensors-detect --auto        # one-time, for CPU sensors
 # NVIDIA driver provides nvidia-smi automatically
 ```
 
-> On TrueNAS SCALE the root filesystem is largely read-only; install into a
-> dataset/app or run from a path under `/mnt`. The tools above ship with SCALE.
+> **TrueNAS SCALE is different** — it's a locked-down appliance: `apt` is
+> disabled, the root filesystem is immutable, and custom `systemd` units don't
+> survive updates. Do **not** use `install.sh` there. Run it as a container
+> instead — see [TrueNAS SCALE](#truenas-scale-docker--custom-app) below.
 
-## Install
+## Install (Proxmox / Plex / any normal Linux host)
 
 ```bash
-git clone <this repo> server-monitoring
-cd server-monitoring
+git clone git@github.com:rudutoitnuhome/Server-monitoring.git
+cd Server-monitoring
 sudo ./install.sh
 sudo nano /etc/server-monitor/config.yaml   # set MQTT broker + node_name
 sudo systemctl start server-monitor
@@ -50,7 +52,37 @@ journalctl -u server-monitor -f
 ```
 
 Repeat on each machine, giving each a distinct `node_name`
-(e.g. `proxmox`, `truenas`, `plex`).
+(e.g. `proxmox`, `plex`).
+
+## TrueNAS SCALE (Docker / Custom App)
+
+TrueNAS SCALE can't run the systemd installer, so use the prebuilt container.
+The image is published to GHCR by GitHub Actions
+(`ghcr.io/rudutoitnuhome/server-monitor:latest`) and bundles `lm-sensors` and
+`smartmontools`, so nothing is installed on the host.
+
+1. **Make the image pullable.** After the first GitHub Actions run, open the
+   package at `github.com/users/rudutoitnuhome/packages/container/server-monitor`
+   → *Package settings* → set visibility to **Public** (so TrueNAS can pull it
+   without registry credentials).
+2. **Create a config on a dataset**, e.g. `/mnt/<POOL>/apps/server-monitor/`,
+   and put your edited `config.yaml` there (copy from `config.example.yaml`,
+   set `node_name: truenas`). `chmod 600` it — it holds the MQTT password.
+3. **Install the app.** TrueNAS UI → **Apps → Discover Apps → Custom App →
+   Install via YAML**, and paste [`docker-compose.truenas.yml`](docker-compose.truenas.yml),
+   replacing `<POOL>` with your pool name.
+
+The compose runs the container `privileged` with host `/dev` and `/sys` mounted
+so `smartctl` can read disk SMART data. CPU temps work too **if** the host has
+the relevant `hwmon`/`coretemp` modules loaded; disk temps work regardless.
+GPU temps are not available in this image (no NVIDIA runtime) — fine, since the
+NAS has no GPU.
+
+Check logs from the app's shell or:
+
+```bash
+docker logs -f server-monitor
+```
 
 ## Configuration
 

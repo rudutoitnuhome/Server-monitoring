@@ -1,0 +1,13 @@
+.git
+.github
+__pycache__/
+*.pyc
+.venv/
+venv/
+.tv/
+.testvenv/
+config.yaml
+systemd/
+install.sh
+README.md
+*.md

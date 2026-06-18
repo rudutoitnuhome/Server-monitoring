@@ -1,0 +1,28 @@
+# TrueNAS SCALE "Custom App" spec for server_monitor.
+#
+# In the TrueNAS web UI:  Apps -> Discover Apps -> Custom App -> "Install via YAML"
+# and paste this file.
+#
+# Before installing:
+#   1. Create a dataset/dir for the config, e.g.  /mnt/<POOL>/apps/server-monitor
+#   2. Put your edited config.yaml there (copy from config.example.yaml).
+#   3. Replace <POOL> below with your pool name.
+#
+# Notes:
+#   * privileged + host /dev are required so smartctl can read disk SMART data.
+#   * /sys is mounted read-only so lm-sensors can read CPU temps *if* the host
+#     has the relevant hwmon modules loaded (disk temps work regardless).
+#   * network_mode: host keeps it simple to reach your MQTT broker.
+
+services:
+  server-monitor:
+    image: ghcr.io/rudutoitnuhome/server-monitor:latest
+    container_name: server-monitor
+    restart: unless-stopped
+    privileged: true              # required for smartctl disk access
+    network_mode: host            # so it can reach the MQTT broker directly
+    volumes:
+      - /mnt/<POOL>/apps/server-monitor/config.yaml:/etc/server-monitor/config.yaml:ro
+      - /dev:/dev                 # disk devices for smartctl
+      - /sys:/sys:ro              # hwmon for CPU temps (best effort)
+      - /run/udev:/run/udev:ro    # helps smartctl identify devices
