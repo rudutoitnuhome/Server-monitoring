@@ -1,0 +1,30 @@
+# server_monitor.py configuration
+# Copy to /etc/server-monitor/config.yaml and edit for each host.
+
+mqtt:
+  host: 192.168.1.10        # your MQTT broker (often the Home Assistant host)
+  port: 1883
+  username: mqttuser        # set to null if your broker allows anonymous
+  password: changeme
+  tls: false
+  # client_id: server-monitor-proxmox   # optional, auto-derived from node_name
+
+# Friendly name for this machine in Home Assistant.
+# Leave null to use the system hostname. Set it per host, e.g. proxmox / truenas / plex.
+node_name: proxmox
+
+interval: 60                # seconds between readings
+
+discovery_prefix: homeassistant   # must match HA's MQTT discovery prefix
+base_topic: server-monitor        # state/availability topic root
+
+cpu:
+  enabled: true
+  per_core: false           # true to publish an entity per CPU core
+
+disks:
+  enabled: true
+  skip_standby: true        # do NOT spin up sleeping drives just to read temp
+
+gpu:
+  enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)

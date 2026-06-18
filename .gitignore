@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.tv/
+.testvenv/
+
+# Local config (may contain MQTT credentials)
+config.yaml
+/etc/server-monitor/
+
+# Editor / OS
+.DS_Store
+*.swp

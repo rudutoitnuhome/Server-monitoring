@@ -1,0 +1,17 @@
+[Unit]
+Description=Server hardware temperature monitor (MQTT -> Home Assistant)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# smartctl needs root to read SMART data; sensors/nvidia-smi are fine as root too.
+User=root
+ExecStart=/opt/server-monitor/venv/bin/python /opt/server-monitor/server_monitor.py /etc/server-monitor/config.yaml
+Restart=on-failure
+RestartSec=10
+# Give nvidia-smi/smartctl time without hanging the unit.
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target
