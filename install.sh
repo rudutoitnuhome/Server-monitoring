@@ -27,12 +27,37 @@ echo "==> Installing application to ${APP_DIR}"
 mkdir -p "${APP_DIR}"
 cp "${SRC_DIR}/server_monitor.py" "${APP_DIR}/"
 
+echo "==> Ensuring Python venv support"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 not found — install it first (e.g. apt install python3)" >&2
+  exit 1
+fi
+# On Debian/Ubuntu the venv module ships in a separate package.
+if ! python3 -m venv --help >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "   installing python3-venv via apt"
+    apt-get update -qq && apt-get install -y python3-venv
+  else
+    echo "python3 venv module unavailable; install python3-venv" >&2
+    exit 1
+  fi
+fi
+
 echo "==> Creating virtualenv"
+# Discard a half-built venv left over from a previous failed run.
+if [[ -d "${APP_DIR}/venv" && ! -x "${APP_DIR}/venv/bin/python" ]]; then
+  rm -rf "${APP_DIR}/venv"
+fi
 if [[ ! -d "${APP_DIR}/venv" ]]; then
   python3 -m venv "${APP_DIR}/venv"
 fi
-"${APP_DIR}/venv/bin/pip" install --quiet --upgrade pip
-"${APP_DIR}/venv/bin/pip" install --quiet -r "${SRC_DIR}/requirements.txt"
+VENV_PY="${APP_DIR}/venv/bin/python"
+# Bootstrap pip if the venv came up without it (happens on some distros).
+if ! "${VENV_PY}" -m pip --version >/dev/null 2>&1; then
+  "${VENV_PY}" -m ensurepip --upgrade
+fi
+"${VENV_PY}" -m pip install --quiet --upgrade pip
+"${VENV_PY}" -m pip install --quiet -r "${SRC_DIR}/requirements.txt"
 
 echo "==> Installing config to ${CONF_DIR}"
 mkdir -p "${CONF_DIR}"
