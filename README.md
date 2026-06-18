@@ -54,12 +54,28 @@ Repeat on each machine, giving each a distinct `node_name`
 
 ## Configuration
 
+> **⚠️ The systemd service only reads `/etc/server-monitor/config.yaml`.**
+> Editing the `config.yaml` inside the cloned repo has **no effect** on the
+> running service — that copy is only used when you run the script by hand from
+> the repo directory. Always edit (or copy your changes to) the `/etc` file:
+>
+> ```bash
+> sudo nano /etc/server-monitor/config.yaml          # edit the live config directly
+> # …or, if you prefer to keep edits in the repo:
+> sudo cp config.yaml /etc/server-monitor/config.yaml
+> sudo chmod 600 /etc/server-monitor/config.yaml     # keep credentials root-only
+> sudo systemctl restart server-monitor              # apply changes
+> ```
+
 See [`config.example.yaml`](config.example.yaml). Key fields:
 
 - `mqtt.host` / `port` / `username` / `password` / `tls`
 - `node_name` — the device name in HA (defaults to hostname)
 - `interval` — seconds between readings (default 60)
 - `cpu.per_core`, `disks.skip_standby`, and per-source `enabled` toggles
+
+Changes to the config require a `sudo systemctl restart server-monitor` to take
+effect.
 
 ## Test on a new host
 
