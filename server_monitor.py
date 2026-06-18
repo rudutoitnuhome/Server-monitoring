@@ -154,12 +154,18 @@ def _read_cpu_sensors(per_core: bool) -> list[Reading]:
         except json.JSONDecodeError:
             return []
 
-    readings: list[Reading] = []
-    package_found = False
+    # Each physical socket appears as its own CPU chip (e.g. coretemp-isa-0000
+    # and coretemp-isa-0001 on a dual-socket board, or two k10temp chips).
+    # Collect one package temperature per socket, plus its cores if requested.
+    sockets: list[dict] = []  # [{"temp": float, "cores": [(label, temp), ...]}]
 
     for chip, features in data.items():
         if not isinstance(features, dict):
             continue
+        if not _is_cpu_chip(chip):
+            continue
+        package_temp: float | None = None
+        cores: list[tuple[str, float]] = []
         for label, values in features.items():
             if not isinstance(values, dict):
                 continue
@@ -167,25 +173,63 @@ def _read_cpu_sensors(per_core: bool) -> list[Reading]:
             if temp is None:
                 continue
             lower = label.lower()
-            is_package = any(
-                tag in lower for tag in ("package", "tctl", "tdie", "composite")
-            )
-            is_core = lower.startswith("core")
-            if is_package and not package_found:
-                readings.insert(0, Reading("cpu_temp", "CPU Temperature", temp))
-                package_found = True
-            elif per_core and is_core:
-                idx = slugify(label)
+            if package_temp is None and any(
+                tag in lower for tag in ("package", "tctl", "tdie")
+            ):
+                package_temp = temp
+            elif lower.startswith("core"):
+                cores.append((label, temp))
+        if package_temp is not None:
+            sockets.append({"temp": package_temp, "cores": cores})
+
+    readings = _sockets_to_readings(sockets, per_core)
+    if readings:
+        return readings
+
+    # No recognisable CPU package sensor — fall back to the hottest temp seen.
+    hottest = _hottest_temp(data)
+    if hottest is not None:
+        return [Reading("cpu_temp", "CPU Temperature", hottest)]
+    return []
+
+
+def _is_cpu_chip(chip: str) -> bool:
+    lower = chip.lower()
+    return (
+        lower.startswith(("coretemp", "k10temp", "zenpower"))
+        or "cpu" in lower
+    )
+
+
+def _sockets_to_readings(sockets: list[dict], per_core: bool) -> list[Reading]:
+    """Turn detected sockets into readings.
+
+    Single socket keeps the stable ``cpu_temp`` key (backwards compatible with
+    single-CPU hosts); multiple sockets are numbered ``cpu0_temp``, ``cpu1_temp``.
+    """
+    readings: list[Reading] = []
+    if len(sockets) == 1:
+        sock = sockets[0]
+        readings.append(Reading("cpu_temp", "CPU Temperature", sock["temp"]))
+        if per_core:
+            for label, temp in sock["cores"]:
                 readings.append(
-                    Reading(f"cpu_{idx}_temp", f"CPU {label}", temp)
+                    Reading(f"cpu_{slugify(label)}_temp", f"CPU {label}", temp)
                 )
-
-    # No explicit package sensor — fall back to the hottest core/temp seen.
-    if not package_found:
-        hottest = _hottest_temp(data)
-        if hottest is not None:
-            readings.insert(0, Reading("cpu_temp", "CPU Temperature", hottest))
-
+    else:
+        for i, sock in enumerate(sockets):
+            readings.append(
+                Reading(f"cpu{i}_temp", f"CPU {i} Temperature", sock["temp"])
+            )
+            if per_core:
+                for label, temp in sock["cores"]:
+                    readings.append(
+                        Reading(
+                            f"cpu{i}_{slugify(label)}_temp",
+                            f"CPU {i} {label}",
+                            temp,
+                        )
+                    )
     return readings
 
 
@@ -211,26 +255,39 @@ def _hottest_temp(data: dict) -> float | None:
 
 
 def _read_cpu_hwmon() -> list[Reading]:
-    """Fallback: read CPU temp directly from /sys/class/hwmon."""
+    """Fallback: read CPU temps directly from /sys/class/hwmon.
+
+    Each matching hwmon device is treated as one socket (so dual-socket boards
+    report both). Per device we use the hottest temp as that socket's value.
+    """
     base = "/sys/class/hwmon"
     if not os.path.isdir(base):
         return []
-    hottest: float | None = None
-    for entry in os.listdir(base):
+    socket_temps: list[float] = []
+    # Sort for stable socket numbering across runs.
+    for entry in sorted(os.listdir(base)):
         hwmon = os.path.join(base, entry)
         name = _read_text(os.path.join(hwmon, "name"))
         if name not in ("coretemp", "k10temp", "zenpower", "cpu_thermal"):
             continue
+        device_hottest: float | None = None
         for fname in os.listdir(hwmon):
             if re.fullmatch(r"temp\d+_input", fname):
                 raw = _read_text(os.path.join(hwmon, fname))
-                if raw and raw.isdigit():
+                if raw and raw.lstrip("-").isdigit():
                     temp = int(raw) / 1000.0
-                    if hottest is None or temp > hottest:
-                        hottest = temp
-    if hottest is None:
+                    if device_hottest is None or temp > device_hottest:
+                        device_hottest = temp
+        if device_hottest is not None:
+            socket_temps.append(device_hottest)
+    if not socket_temps:
         return []
-    return [Reading("cpu_temp", "CPU Temperature", hottest)]
+    if len(socket_temps) == 1:
+        return [Reading("cpu_temp", "CPU Temperature", socket_temps[0])]
+    return [
+        Reading(f"cpu{i}_temp", f"CPU {i} Temperature", temp)
+        for i, temp in enumerate(socket_temps)
+    ]
 
 
 def _read_text(path: str) -> str | None:
