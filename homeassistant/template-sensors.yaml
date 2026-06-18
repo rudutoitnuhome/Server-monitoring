@@ -1,0 +1,98 @@
+# Template sensors: hottest disk per server.
+#
+# Each sensor reports the maximum temperature across that server's disk sensors,
+# matched by entity_id prefix so new disks are picked up automatically. The
+# `hottest_drive` attribute names the drive currently running hottest.
+#
+# Add this to configuration.yaml. If you already have a top-level `template:`
+# key, merge these list items under it (don't create a second `template:`).
+# Then: Developer Tools -> YAML -> "Reload Template Entities" (or restart HA).
+
+template:
+  - sensor:
+      - name: Plex-Luthor Hottest Disk
+        unique_id: plex_luthor_hottest_disk
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        availability: >
+          {{ states.sensor
+             | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | list | count > 0 }}
+        state: >
+          {% set temps = states.sensor
+             | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | map(attribute='state') | map('float', 0) | list %}
+          {{ max(temps) | round(1) if temps else none }}
+        attributes:
+          hottest_drive: >
+            {% set ns = namespace(name=none, temp=-273) %}
+            {% for s in states.sensor
+               | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+               | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
+              {% if s.state | float(0) > ns.temp %}
+                {% set ns.temp = s.state | float(0) %}
+                {% set ns.name = s.name %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.name }}
+
+      - name: Moxxy-Proxxy Hottest Disk
+        unique_id: moxxy_proxxy_hottest_disk
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        availability: >
+          {{ states.sensor
+             | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | list | count > 0 }}
+        state: >
+          {% set temps = states.sensor
+             | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | map(attribute='state') | map('float', 0) | list %}
+          {{ max(temps) | round(1) if temps else none }}
+        attributes:
+          hottest_drive: >
+            {% set ns = namespace(name=none, temp=-273) %}
+            {% for s in states.sensor
+               | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
+               | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
+              {% if s.state | float(0) > ns.temp %}
+                {% set ns.temp = s.state | float(0) %}
+                {% set ns.name = s.name %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.name }}
+
+      - name: TrueNasty Hottest Disk
+        unique_id: truenasty_hottest_disk
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        availability: >
+          {{ states.sensor
+             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | list | count > 0 }}
+        state: >
+          {% set temps = states.sensor
+             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | map(attribute='state') | map('float', 0) | list %}
+          {{ max(temps) | round(1) if temps else none }}
+        attributes:
+          hottest_drive: >
+            {% set ns = namespace(name=none, temp=-273) %}
+            {% for s in states.sensor
+               | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+               | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
+              {% if s.state | float(0) > ns.temp %}
+                {% set ns.temp = s.state | float(0) %}
+                {% set ns.name = s.name %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.name }}
