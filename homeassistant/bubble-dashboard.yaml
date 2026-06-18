@@ -1,0 +1,540 @@
+# Bubble Card dashboard for Home Assistant.
+# Requires the Bubble Card custom card (HACS -> Clooos/bubble-card), which you
+# already have installed.
+#
+# Style: a mobile-first main page with a navigation button row and a few key
+# controls, plus pop-ups (slide-up panels) for each area. Tap a nav button to
+# open its pop-up.
+#
+# To use:
+#   Settings -> Dashboards -> (+ Add dashboard) -> New dashboard from scratch
+#   -> open it -> pencil -> three-dot menu -> Raw configuration editor -> paste.
+#
+# All entity IDs were validated against your export.
+
+title: Bubble
+views:
+  - title: Home
+    path: home
+    icon: mdi:home
+    cards:
+
+      # ---- Navigation row (opens the pop-ups below) ----
+      - type: custom:bubble-card
+        card_type: horizontal-buttons-stack
+        1_link: '#lights'
+        1_name: Lights
+        1_icon: mdi:lightbulb-group
+        2_link: '#plugs'
+        2_name: Plugs
+        2_icon: mdi:power-socket
+        3_link: '#climate'
+        3_name: Climate
+        3_icon: mdi:thermometer
+        4_link: '#energy'
+        4_name: Energy
+        4_icon: mdi:solar-power
+        5_link: '#printer'
+        5_name: Printer
+        5_icon: mdi:printer-3d
+        6_link: '#servers'
+        6_name: Servers
+        6_icon: mdi:server
+        7_link: '#media'
+        7_name: Media
+        7_icon: mdi:play-circle
+
+      # ---- Overview ----
+      - type: custom:bubble-card
+        card_type: separator
+        name: Overview
+        icon: mdi:view-dashboard
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.pylontech_battery_id_512_battery_charge
+            name: Battery
+            icon: mdi:battery
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.gx_device_pv_power
+            name: Solar
+            icon: mdi:solar-power-variant
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.grid_meter_id_30_grid_power
+            name: Grid
+            icon: mdi:transmission-tower
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.gx_device_consumption_power_l1
+            name: House
+            icon: mdi:home-lightning-bolt
+
+      - type: custom:bubble-card
+        card_type: separator
+        name: Quick controls
+        icon: mdi:gesture-tap-button
+
+      - type: custom:bubble-card
+        card_type: button
+        button_type: switch
+        entity: input_boolean.all_lights
+        name: All Lights
+        icon: mdi:lightbulb-group
+      - type: custom:bubble-card
+        card_type: button
+        button_type: switch
+        entity: switch.geyser
+        name: Geyser
+        icon: mdi:water-boiler
+      - type: custom:bubble-card
+        card_type: button
+        button_type: switch
+        entity: switch.desk
+        name: Desk
+        icon: mdi:desk
+
+      # ===================== POP-UPS =====================
+
+      # ---- Lights ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#lights'
+            name: Lights
+            icon: mdi:lightbulb-group
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: input_boolean.all_lights
+            name: All Lights
+            icon: mdi:lightbulb-group
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_2
+            name: Lounge
+            icon: mdi:sofa
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_5
+            name: Kitchen
+            icon: mdi:countertop
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_4
+            name: Passage
+            icon: mdi:floor-plan
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_7
+            name: Bedroom
+            icon: mdi:bed
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_6
+            name: Erin
+            icon: mdi:bed-king
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_8
+            name: Bathroom
+            icon: mdi:shower
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_3
+            name: Guest Bath
+            icon: mdi:toilet
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.ctlight_9
+            name: Cupboard
+            icon: mdi:wardrobe
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.aqara_night_light
+            name: Night Light
+            icon: mdi:weather-night
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.desk_wled
+            name: Desk WLED
+            icon: mdi:led-strip-variant
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.kitchen_wled
+            name: Kitchen WLED
+            icon: mdi:led-strip-variant
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: light.aqara_single_switch_module_t1
+            name: Living Switch
+            icon: mdi:light-switch
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.home_adaptive_lighting_home
+            name: Adaptive Lighting
+            icon: mdi:theme-light-dark
+
+      # ---- Plugs ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#plugs'
+            name: Plugs
+            icon: mdi:power-socket
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.geyser
+            name: Geyser
+            icon: mdi:water-boiler
+            show_state: true
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.desk
+            name: Desk
+            icon: mdi:desk
+            show_state: true
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.lab_2
+            name: Lab#2
+            icon: mdi:flask
+            show_state: true
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.inverter_out
+            name: Inverter Out
+            icon: mdi:power-plug
+            show_state: true
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.anne_frank
+            name: Anne Frank
+            icon: mdi:power-socket-eu
+            show_state: true
+          - type: custom:bubble-card
+            card_type: separator
+            name: Power now
+            icon: mdi:flash
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.geyser_energy_power
+            name: Geyser
+            icon: mdi:water-boiler
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.desk_power
+            name: Desk
+            icon: mdi:desk
+
+      # ---- Climate ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#climate'
+            name: Climate
+            icon: mdi:thermometer
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.lumi_lumi_airmonitor_acn01_temperature
+            name: Living Room
+            icon: mdi:sofa
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.aqara_temp_humidity_sensor_t1_temperature
+            name: Guest Bath
+            icon: mdi:shower
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.wifi_smart_switch_temperature
+            name: Desk
+            icon: mdi:desk
+          - type: custom:bubble-card
+            card_type: separator
+            name: Air quality
+            icon: mdi:air-filter
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.wifi_smart_switch_carbon_dioxide
+            name: CO₂
+            icon: mdi:molecule-co2
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.lumi_lumi_airmonitor_acn01_volatile_organic_compounds_parts
+            name: VOC
+            icon: mdi:chemical-weapon
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.openweathermap_temperature
+            name: Outdoor
+            icon: mdi:weather-partly-cloudy
+
+      # ---- Energy ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#energy'
+            name: Energy
+            icon: mdi:solar-power
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.pylontech_battery_id_512_battery_charge
+            name: Battery SoC
+            icon: mdi:battery
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.gx_device_dc_battery_power
+            name: Battery power
+            icon: mdi:battery-charging
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.gx_device_pv_power
+            name: Solar
+            icon: mdi:solar-power-variant
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.smartsolar_charger_mppt_150_35_id_277_yield_today
+            name: Yield today
+            icon: mdi:white-balance-sunny
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.grid_meter_id_30_grid_power
+            name: Grid
+            icon: mdi:transmission-tower
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.gx_device_consumption_power_l1
+            name: House load
+            icon: mdi:home-lightning-bolt
+          - type: custom:bubble-card
+            card_type: separator
+            name: Controls
+            icon: mdi:tune
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: switch.ess_force_charge
+            name: Force charge
+            icon: mdi:battery-arrow-up
+
+      # ---- Printer ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#printer'
+            name: 3D Printer
+            icon: mdi:printer-3d
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.k1max_b0d1_print_status
+            name: Status
+            icon: mdi:printer-3d-nozzle
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.k1max_b0d1_print_progress
+            name: Progress
+            icon: mdi:progress-clock
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.k1max_b0d1_print_time_left
+            name: Time left
+            icon: mdi:timer-sand
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.k1max_b0d1_nozzle_temperature
+            name: Nozzle
+            icon: mdi:printer-3d-nozzle-heat
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.k1max_b0d1_bed_temperature
+            name: Bed
+            icon: mdi:radiator
+          - type: custom:bubble-card
+            card_type: button
+            button_type: switch
+            entity: light.k1max_b0d1_light
+            name: Light
+            icon: mdi:lightbulb
+
+      # ---- Servers ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#servers'
+            name: Servers
+            icon: mdi:server
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.plex_luthor_cpu_temperature
+            name: Plex CPU
+            icon: mdi:cpu-64-bit
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.moxxy_proxxy_cpu_0_temperature
+            name: Proxmox CPU 0
+            icon: mdi:cpu-64-bit
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.moxxy_proxxy_cpu_1_temperature
+            name: Proxmox CPU 1
+            icon: mdi:cpu-64-bit
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_cpu_temperature
+            name: TrueNAS CPU
+            icon: mdi:cpu-64-bit
+          - type: custom:bubble-card
+            card_type: separator
+            name: Disks
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.plex_luthor_disk_sda_samsung_ssd_870_evo_500gb
+            name: Plex SSD
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.moxxy_proxxy_disk_sda_st4000lm024_2an17v
+            name: Proxmox sda
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.moxxy_proxxy_disk_sdb_st4000lm024_2an17v
+            name: Proxmox sdb
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdb_dev_sdb
+            name: TrueNAS sdb
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdc_dev_sdc
+            name: TrueNAS sdc
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdd_dev_sdd
+            name: TrueNAS sdd
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sde_dev_sde
+            name: TrueNAS sde
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdf_dev_sdf
+            name: TrueNAS sdf
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdg_dev_sdg
+            name: TrueNAS sdg
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdh_dev_sdh
+            name: TrueNAS sdh
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdi_dev_sdi
+            name: TrueNAS sdi
+            icon: mdi:harddisk
+
+      # ---- Media ----
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: '#media'
+            name: Media
+            icon: mdi:play-circle
+          - type: custom:bubble-card
+            card_type: media-player
+            entity: media_player.living_room_apple_tv
+            name: Apple TV
+          - type: custom:bubble-card
+            card_type: media-player
+            entity: media_player.living_room_mini
+            name: Living Room Mini
+          - type: custom:bubble-card
+            card_type: media-player
+            entity: media_player.desk_1
+            name: Desk
+          - type: custom:bubble-card
+            card_type: media-player
+            entity: media_player.bedroom_mini_1
+            name: Bedroom Mini 1
+          - type: custom:bubble-card
+            card_type: media-player
+            entity: media_player.bedroom_mini_2
+            name: Bedroom Mini 2
