@@ -1,10 +1,12 @@
 # Bubble Card dashboard for Home Assistant.
-# Requires the Bubble Card custom card (HACS -> Clooos/bubble-card), which you
-# already have installed.
+# Requires Bubble Card v3.2.0+ (HACS -> Clooos/bubble-card), already installed.
 #
 # Style: a mobile-first main page with a navigation button row and a few key
-# controls, plus pop-ups (slide-up panels) for each area. Tap a nav button to
-# open its pop-up.
+# controls, plus standalone pop-ups (slide-up panels) for each area. Tap a nav
+# button to open its pop-up.
+#
+# Pop-ups use the v3.2.0 standalone format (pop-up card holds its children under
+# a `cards:` key — no vertical-stack wrapper).
 #
 # To use:
 #   Settings -> Dashboards -> (+ Add dashboard) -> New dashboard from scratch
@@ -103,16 +105,15 @@ views:
         name: Desk
         icon: mdi:desk
 
-      # ===================== POP-UPS =====================
+      # ===================== STANDALONE POP-UPS =====================
 
       # ---- Lights ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#lights'
+        name: Lights
+        icon: mdi:lightbulb-group
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#lights'
-            name: Lights
-            icon: mdi:lightbulb-group
           - type: custom:bubble-card
             card_type: button
             button_type: switch
@@ -199,13 +200,12 @@ views:
             icon: mdi:theme-light-dark
 
       # ---- Plugs ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#plugs'
+        name: Plugs
+        icon: mdi:power-socket
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#plugs'
-            name: Plugs
-            icon: mdi:power-socket
           - type: custom:bubble-card
             card_type: button
             button_type: switch
@@ -259,13 +259,12 @@ views:
             icon: mdi:desk
 
       # ---- Climate ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#climate'
+        name: Climate
+        icon: mdi:thermometer
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#climate'
-            name: Climate
-            icon: mdi:thermometer
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -308,13 +307,12 @@ views:
             icon: mdi:weather-partly-cloudy
 
       # ---- Energy ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#energy'
+        name: Energy
+        icon: mdi:solar-power
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#energy'
-            name: Energy
-            icon: mdi:solar-power
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -363,13 +361,12 @@ views:
             icon: mdi:battery-arrow-up
 
       # ---- Printer ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#printer'
+        name: 3D Printer
+        icon: mdi:printer-3d
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#printer'
-            name: 3D Printer
-            icon: mdi:printer-3d
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -408,13 +405,12 @@ views:
             icon: mdi:lightbulb
 
       # ---- Servers ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#servers'
+        name: Servers
+        icon: mdi:server
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#servers'
-            name: Servers
-            icon: mdi:server
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -511,13 +507,12 @@ views:
             icon: mdi:harddisk
 
       # ---- Media ----
-      - type: vertical-stack
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#media'
+        name: Media
+        icon: mdi:play-circle
         cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: '#media'
-            name: Media
-            icon: mdi:play-circle
           - type: custom:bubble-card
             card_type: media-player
             entity: media_player.living_room_apple_tv
