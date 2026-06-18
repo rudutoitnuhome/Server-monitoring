@@ -1,15 +1,13 @@
 # Home Assistant dashboard for server_monitor temperatures.
 #
-# Uses only built-in cards (no HACS required) and the deterministic entity IDs
-# produced once the agent publishes object_id-based discovery (sensor.<node>_<key>).
+# Built-in cards only (no HACS). Entity IDs below match the live entities as of
+# setup; if you rebuild a host's disks or rename a host, re-check the ids via
+# Developer Tools -> Template and update accordingly.
 #
 # To use:
 #   Settings -> Dashboards -> (+ Add dashboard) -> New dashboard from scratch,
 #   then open it -> top-right pencil -> three-dot menu -> "Raw configuration
 #   editor" and paste everything below.
-#
-# Entity IDs assume node_names: Plex-Luthor, Moxxy-Proxxy, Truenasty.
-# If you rename a host, update the sensor.* ids to match.
 
 title: Servers
 views:
@@ -23,7 +21,7 @@ views:
         cards:
           - type: gauge
             name: Plex-Luthor CPU
-            entity: sensor.plex_luthor_cpu_temp
+            entity: sensor.plex_luthor_cpu_temperature
             unit: °C
             min: 20
             max: 90
@@ -36,16 +34,16 @@ views:
             title: Plex-Luthor
             state_color: true
             entities:
-              - entity: sensor.plex_luthor_cpu_temp
+              - entity: sensor.plex_luthor_cpu_temperature
                 name: CPU
-              - entity: sensor.plex_luthor_disk_s6p6nj0w325302t_temp
-                name: NVMe (S6P6…25302T)
+              - entity: sensor.plex_luthor_disk_sda_samsung_ssd_870_evo_500gb
+                name: SSD sda (870 EVO)
           - type: history-graph
             title: Plex-Luthor – 24h
             hours_to_show: 24
             entities:
-              - sensor.plex_luthor_cpu_temp
-              - sensor.plex_luthor_disk_s6p6nj0w325302t_temp
+              - sensor.plex_luthor_cpu_temperature
+              - sensor.plex_luthor_disk_sda_samsung_ssd_870_evo_500gb
 
       # ---------------- Moxxy-Proxxy ----------------
       - type: vertical-stack
@@ -54,7 +52,7 @@ views:
             cards:
               - type: gauge
                 name: CPU 0
-                entity: sensor.moxxy_proxxy_cpu0_temp
+                entity: sensor.moxxy_proxxy_cpu_0_temperature
                 unit: °C
                 min: 20
                 max: 90
@@ -65,7 +63,7 @@ views:
                   red: 80
               - type: gauge
                 name: CPU 1
-                entity: sensor.moxxy_proxxy_cpu1_temp
+                entity: sensor.moxxy_proxxy_cpu_1_temperature
                 unit: °C
                 min: 20
                 max: 90
@@ -78,29 +76,29 @@ views:
             title: Moxxy-Proxxy
             state_color: true
             entities:
-              - entity: sensor.moxxy_proxxy_cpu0_temp
+              - entity: sensor.moxxy_proxxy_cpu_0_temperature
                 name: CPU 0
-              - entity: sensor.moxxy_proxxy_cpu1_temp
+              - entity: sensor.moxxy_proxxy_cpu_1_temperature
                 name: CPU 1
-              - entity: sensor.moxxy_proxxy_disk_wck474q3_temp
-                name: Disk WCK474Q3
-              - entity: sensor.moxxy_proxxy_disk_wck44pkz_temp
-                name: Disk WCK44PKZ
+              - entity: sensor.moxxy_proxxy_disk_sda_st4000lm024_2an17v
+                name: Disk sda (ST4000LM024)
+              - entity: sensor.moxxy_proxxy_disk_sdb_st4000lm024_2an17v
+                name: Disk sdb (ST4000LM024)
           - type: history-graph
             title: Moxxy-Proxxy – 24h
             hours_to_show: 24
             entities:
-              - sensor.moxxy_proxxy_cpu0_temp
-              - sensor.moxxy_proxxy_cpu1_temp
-              - sensor.moxxy_proxxy_disk_wck474q3_temp
-              - sensor.moxxy_proxxy_disk_wck44pkz_temp
+              - sensor.moxxy_proxxy_cpu_0_temperature
+              - sensor.moxxy_proxxy_cpu_1_temperature
+              - sensor.moxxy_proxxy_disk_sda_st4000lm024_2an17v
+              - sensor.moxxy_proxxy_disk_sdb_st4000lm024_2an17v
 
-      # ---------------- Truenasty ----------------
+      # ---------------- TrueNasty ----------------
       - type: vertical-stack
         cards:
           - type: gauge
-            name: Truenasty CPU
-            entity: sensor.truenasty_cpu_temp
+            name: TrueNasty CPU
+            entity: sensor.truenasty_cpu_temperature
             unit: °C
             min: 20
             max: 90
@@ -110,38 +108,38 @@ views:
               yellow: 65
               red: 80
           - type: entities
-            title: Truenasty
+            title: TrueNasty
             state_color: true
             entities:
-              - entity: sensor.truenasty_cpu_temp
+              - entity: sensor.truenasty_cpu_temperature
                 name: CPU
               - type: section
                 label: Disks
-              - entity: sensor.truenasty_disk_7pkaw5hg_temp
-                name: Disk 7PKAW5HG
-              - entity: sensor.truenasty_disk_7pk85e1g_temp
-                name: Disk 7PK85E1G
-              - entity: sensor.truenasty_disk_7pk6p6gc_temp
-                name: Disk 7PK6P6GC
-              - entity: sensor.truenasty_disk_7gj310bk_temp
-                name: Disk 7GJ310BK
-              - entity: sensor.truenasty_disk_zrt0l5f80000w3257ek1_temp
-                name: Disk ZRT…57EK1
-              - entity: sensor.truenasty_disk_zrt0l58h0000w3257exa_temp
-                name: Disk ZRT…57EXA
-              - entity: sensor.truenasty_disk_zrt0l60a0000w325rr1p_temp
-                name: Disk ZRT…5RR1P
-              - entity: sensor.truenasty_disk_zrt0l66z0000w324ntt8_temp
-                name: Disk ZRT…4NTT8
+              - entity: sensor.truenasty_disk_sdb_dev_sdb
+                name: Disk sdb
+              - entity: sensor.truenasty_disk_sdc_dev_sdc
+                name: Disk sdc
+              - entity: sensor.truenasty_disk_sdd_dev_sdd
+                name: Disk sdd
+              - entity: sensor.truenasty_disk_sde_dev_sde
+                name: Disk sde
+              - entity: sensor.truenasty_disk_sdf_dev_sdf
+                name: Disk sdf
+              - entity: sensor.truenasty_disk_sdg_dev_sdg
+                name: Disk sdg
+              - entity: sensor.truenasty_disk_sdh_dev_sdh
+                name: Disk sdh
+              - entity: sensor.truenasty_disk_sdi_dev_sdi
+                name: Disk sdi
           - type: history-graph
-            title: Truenasty disks – 24h
+            title: TrueNasty disks – 24h
             hours_to_show: 24
             entities:
-              - sensor.truenasty_disk_7pkaw5hg_temp
-              - sensor.truenasty_disk_7pk85e1g_temp
-              - sensor.truenasty_disk_7pk6p6gc_temp
-              - sensor.truenasty_disk_7gj310bk_temp
-              - sensor.truenasty_disk_zrt0l5f80000w3257ek1_temp
-              - sensor.truenasty_disk_zrt0l58h0000w3257exa_temp
-              - sensor.truenasty_disk_zrt0l60a0000w325rr1p_temp
-              - sensor.truenasty_disk_zrt0l66z0000w324ntt8_temp
+              - sensor.truenasty_disk_sdb_dev_sdb
+              - sensor.truenasty_disk_sdc_dev_sdc
+              - sensor.truenasty_disk_sdd_dev_sdd
+              - sensor.truenasty_disk_sde_dev_sde
+              - sensor.truenasty_disk_sdf_dev_sdf
+              - sensor.truenasty_disk_sdg_dev_sdg
+              - sensor.truenasty_disk_sdh_dev_sdh
+              - sensor.truenasty_disk_sdi_dev_sdi
