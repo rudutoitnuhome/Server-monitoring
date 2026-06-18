@@ -1,0 +1,614 @@
+# Full Home Assistant dashboard, generated from the entity list.
+#
+# One dashboard, several tabbed views (Home, Lights, Plugs, Climate, Energy,
+# Printer, Servers, Media, People, System). Built-in cards only (no HACS).
+#
+# To use:
+#   Settings -> Dashboards -> (+ Add dashboard) -> New dashboard from scratch
+#   -> open it -> pencil (top right) -> three-dot menu -> Raw configuration
+#   editor -> select all -> paste this in.
+#
+# Curated, not exhaustive: omits *_identify buttons, BLE care_*/estimated_distance
+# trackers, duplicate rudis_iphone_*_2 sensors, per-cell battery IDs and internal
+# VE.Bus alarm sensors. Ask to add any of those back.
+
+title: Home
+views:
+
+  # ============================ HOME ============================
+  - title: Home
+    path: home
+    icon: mdi:home
+    cards:
+      - type: weather-forecast
+        entity: weather.openweathermap
+        show_current: true
+        show_forecast: true
+
+      - type: entities
+        title: Presence
+        entities:
+          - entity: person.rudi_du_toit
+          - entity: device_tracker.rudis_iphone_17
+            name: iPhone 17
+          - entity: sensor.rudis_iphone_17_battery_level
+            name: iPhone battery
+
+      - type: glance
+        title: Power at a glance
+        columns: 2
+        entities:
+          - entity: sensor.pylontech_battery_id_512_battery_charge
+            name: Battery
+          - entity: sensor.gx_device_pv_power
+            name: Solar
+          - entity: sensor.grid_meter_id_30_grid_power
+            name: Grid
+          - entity: sensor.gx_device_consumption_power_l1
+            name: House
+
+      - type: entities
+        title: Quick controls
+        state_color: true
+        entities:
+          - entity: input_boolean.all_lights
+            name: All Lights
+          - entity: switch.geyser
+          - entity: switch.desk
+          - entity: switch.inverter_out
+          - entity: switch.lab_2
+
+      - type: glance
+        title: Indoor climate
+        columns: 2
+        entities:
+          - entity: sensor.lumi_lumi_airmonitor_acn01_temperature
+            name: Living Room
+          - entity: sensor.aqara_temp_humidity_sensor_t1_temperature
+            name: Guest Bath
+          - entity: sensor.wifi_smart_switch_temperature
+            name: Desk
+          - entity: sensor.wifi_smart_switch_carbon_dioxide
+            name: CO₂
+
+  # ============================ LIGHTS ============================
+  - title: Lights
+    path: lights
+    icon: mdi:lightbulb-group
+    cards:
+      - type: entities
+        title: All
+        entities:
+          - entity: input_boolean.all_lights
+            name: All Lights
+
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: tile
+            entity: light.ctlight_2
+            name: Lounge
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_5
+            name: Kitchen
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_4
+            name: Passage
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_7
+            name: Bedroom
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_6
+            name: Erin
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_8
+            name: Bathroom
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_3
+            name: Guest Bath
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight_9
+            name: Cupboard
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.ctlight
+            name: ctlight
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.aqara_night_light
+            name: Night Light
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.aqara_single_switch_module_t1
+            name: Living Switch
+          - type: tile
+            entity: light.desk_wled
+            name: Desk WLED
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.kitchen_wled
+            name: Kitchen WLED
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.home_assistant_voice_0a4a3f_led_ring
+            name: Voice Ring
+            features: [{type: light-brightness}]
+          - type: tile
+            entity: light.k1max_b0d1_light
+            name: Printer
+
+      - type: entities
+        title: Adaptive Lighting
+        state_color: true
+        entities:
+          - entity: switch.home_adaptive_lighting_home
+            name: Adaptive Lighting
+          - entity: switch.adaptive_lighting_home_adaptive_lighting_adapt_brightness_home
+            name: Adapt brightness
+          - entity: switch.adaptive_lighting_home_adaptive_lighting_adapt_color_home
+            name: Adapt color
+          - entity: switch.adaptive_lighting_home_adaptive_lighting_sleep_mode_home
+            name: Sleep mode
+
+  # ============================ PLUGS / SWITCHES ============================
+  - title: Plugs
+    path: plugs
+    icon: mdi:power-socket
+    cards:
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: tile
+            entity: switch.geyser
+            name: Geyser
+          - type: tile
+            entity: switch.desk
+            name: Desk
+          - type: tile
+            entity: switch.lab_2
+            name: Lab#2
+          - type: tile
+            entity: switch.inverter_out
+            name: Inverter Out
+          - type: tile
+            entity: switch.anne_frank
+            name: Anne Frank
+
+      - type: entities
+        title: Geyser
+        entities:
+          - entity: sensor.geyser_energy_power
+            name: Power
+          - entity: sensor.geyser_energy_voltage
+            name: Voltage
+          - entity: sensor.geyser_energy_current
+            name: Current
+          - entity: sensor.geyser_energy_today
+            name: Energy today
+
+      - type: entities
+        title: Desk
+        entities:
+          - entity: sensor.desk_power
+          - entity: sensor.desk_voltage
+          - entity: sensor.desk_current
+          - entity: sensor.desk_summation_delivered
+            name: Energy total
+
+      - type: entities
+        title: Lab#2 / Inverter Out / Anne Frank
+        entities:
+          - entity: sensor.lab_2_power
+            name: Lab#2 power
+          - entity: sensor.inverter_out_power
+            name: Inverter Out power
+          - entity: sensor.anne_frank_power
+            name: Anne Frank power
+
+  # ============================ CLIMATE & AIR ============================
+  - title: Climate
+    path: climate
+    icon: mdi:thermometer
+    cards:
+      - type: entities
+        title: Temperature & Humidity
+        entities:
+          - entity: sensor.lumi_lumi_airmonitor_acn01_temperature
+            name: Living Room temp
+          - entity: sensor.lumi_lumi_airmonitor_acn01_humidity
+            name: Living Room humidity
+          - entity: sensor.aqara_temp_humidity_sensor_t1_temperature
+            name: Guest Bath temp
+          - entity: sensor.aqara_temp_humidity_sensor_t1_humidity
+            name: Guest Bath humidity
+          - entity: sensor.wifi_smart_switch_temperature
+            name: Desk temp
+          - entity: sensor.wifi_smart_switch_humidity
+            name: Desk humidity
+
+      - type: entities
+        title: Air quality
+        entities:
+          - entity: sensor.wifi_smart_switch_carbon_dioxide
+            name: CO₂
+          - entity: sensor.wifi_smart_switch_air_quality
+            name: Air quality
+          - entity: sensor.lumi_lumi_airmonitor_acn01_volatile_organic_compounds_parts
+            name: VOC
+
+      - type: history-graph
+        title: Indoor temps – 24h
+        hours_to_show: 24
+        entities:
+          - sensor.lumi_lumi_airmonitor_acn01_temperature
+          - sensor.aqara_temp_humidity_sensor_t1_temperature
+          - sensor.wifi_smart_switch_temperature
+
+      - type: entities
+        title: Outdoor (OpenWeatherMap)
+        entities:
+          - entity: sensor.openweathermap_temperature
+            name: Temperature
+          - entity: sensor.openweathermap_apparent_temperature
+            name: Feels like
+          - entity: sensor.openweathermap_humidity
+            name: Humidity
+          - entity: sensor.openweathermap_wind_speed
+            name: Wind
+          - entity: sensor.openweathermap_uv_index
+            name: UV index
+
+  # ============================ ENERGY & SOLAR ============================
+  - title: Energy
+    path: energy
+    icon: mdi:solar-power
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.pylontech_battery_id_512_battery_charge
+            name: Battery
+            unit: '%'
+            min: 0
+            max: 100
+            severity: {green: 50, yellow: 20, red: 0}
+          - type: gauge
+            entity: sensor.gx_device_pv_power
+            name: Solar
+            unit: W
+            min: 0
+            max: 5000
+            needle: true
+
+      - type: entities
+        title: Battery
+        entities:
+          - entity: sensor.pylontech_battery_id_512_battery_charge
+            name: State of charge
+          - entity: sensor.gx_device_dc_battery_power
+            name: Power (+chg / −dis)
+          - entity: sensor.gx_device_dc_battery_voltage
+            name: Voltage
+          - entity: sensor.gx_device_dc_battery_current
+            name: Current
+          - entity: sensor.pylontech_battery_id_512_battery_temperature
+            name: Temperature
+          - entity: sensor.pylontech_battery_id_512_battery_state_of_health
+            name: State of health
+
+      - type: entities
+        title: Solar
+        entities:
+          - entity: sensor.gx_device_pv_power
+            name: PV power
+          - entity: sensor.smartsolar_charger_mppt_150_35_id_277_yield_today
+            name: Yield today
+          - entity: sensor.smartsolar_charger_mppt_150_35_id_277_pv_yield_power
+            name: MPPT power
+          - entity: sensor.power_production_now
+            name: Forecast now
+          - entity: sensor.energy_production_today
+            name: Forecast today
+
+      - type: entities
+        title: Grid & House
+        entities:
+          - entity: sensor.grid_meter_id_30_grid_power
+            name: Grid power
+          - entity: sensor.grid_meter_id_30_grid_consumption
+            name: Grid consumption
+          - entity: sensor.grid_meter_id_30_grid_feed_in
+            name: Grid feed-in
+          - entity: sensor.gx_device_consumption_power_l1
+            name: House load
+          - entity: sensor.gx_device_ac_active_input_source
+            name: Active input
+
+      - type: entities
+        title: Inverter (MultiPlus-II)
+        entities:
+          - entity: sensor.multiplus_ii_48_8000_110_100_id_276_inverter_state
+            name: State
+          - entity: sensor.multiplus_ii_48_8000_110_100_id_276_inverter_output_power_l1
+            name: Output power
+          - entity: sensor.multiplus_ii_48_8000_110_100_id_276_inverter_input_power_l1
+            name: Input power
+          - entity: binary_sensor.multiplus_ii_48_8000_110_100_id_276_inverter_connected
+            name: Connected
+
+      - type: entities
+        title: Controls
+        state_color: true
+        entities:
+          - entity: select.gx_device_ess_mode
+            name: ESS mode
+          - entity: switch.ess_force_charge
+            name: Force charge
+          - entity: number.gx_device_ess_min_soc_limit
+            name: Min SoC limit
+          - entity: number.gx_device_ess_max_charge_current
+            name: Max charge current
+
+      - type: history-graph
+        title: Solar / Grid / Battery – 24h
+        hours_to_show: 24
+        entities:
+          - sensor.gx_device_pv_power
+          - sensor.grid_meter_id_30_grid_power
+          - sensor.gx_device_dc_battery_power
+
+  # ============================ 3D PRINTER ============================
+  - title: Printer
+    path: printer
+    icon: mdi:printer-3d
+    cards:
+      - type: picture-entity
+        entity: camera.k1max_b0d1_printer_camera
+        name: K1 Max
+        show_state: false
+
+      - type: entities
+        title: Status
+        entities:
+          - entity: sensor.k1max_b0d1_print_status
+            name: Status
+          - entity: sensor.k1max_b0d1_print_progress
+            name: Progress
+          - entity: sensor.k1max_b0d1_print_time_left
+            name: Time left
+          - entity: sensor.k1max_b0d1_current_object
+            name: Current object
+          - entity: sensor.k1max_b0d1_working_layer
+            name: Layer
+          - entity: sensor.k1max_b0d1_total_layers
+            name: Total layers
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.k1max_b0d1_nozzle_temperature
+            name: Nozzle
+            unit: °C
+            min: 0
+            max: 300
+            severity: {green: 0, yellow: 200, red: 260}
+          - type: gauge
+            entity: sensor.k1max_b0d1_bed_temperature
+            name: Bed
+            unit: °C
+            min: 0
+            max: 120
+            severity: {green: 0, yellow: 70, red: 100}
+          - type: gauge
+            entity: sensor.k1max_b0d1_chamber_temperature
+            name: Chamber
+            unit: °C
+            min: 0
+            max: 80
+            needle: true
+
+      - type: entities
+        title: Hardware
+        state_color: true
+        entities:
+          - entity: light.k1max_b0d1_light
+            name: Light
+          - entity: fan.k1max_b0d1_model_fan
+            name: Model fan
+          - entity: fan.k1max_b0d1_case_fan
+            name: Case fan
+          - entity: fan.k1max_b0d1_side_fan
+            name: Side fan
+          - entity: sensor.k1max_b0d1_filament_status
+            name: Filament
+
+  # ============================ SERVERS ============================
+  - title: Servers
+    path: servers
+    icon: mdi:server
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: gauge
+            name: Plex-Luthor CPU
+            entity: sensor.plex_luthor_cpu_temperature
+            unit: °C
+            min: 20
+            max: 90
+            needle: true
+            severity: {green: 0, yellow: 65, red: 80}
+          - type: entities
+            title: Plex-Luthor
+            entities:
+              - entity: sensor.plex_luthor_cpu_temperature
+                name: CPU
+              - entity: sensor.plex_luthor_disk_sda_samsung_ssd_870_evo_500gb
+                name: SSD sda (870 EVO)
+
+      - type: vertical-stack
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU 0
+                entity: sensor.moxxy_proxxy_cpu_0_temperature
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 65, red: 80}
+              - type: gauge
+                name: CPU 1
+                entity: sensor.moxxy_proxxy_cpu_1_temperature
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 65, red: 80}
+          - type: entities
+            title: Moxxy-Proxxy
+            entities:
+              - entity: sensor.moxxy_proxxy_cpu_0_temperature
+                name: CPU 0
+              - entity: sensor.moxxy_proxxy_cpu_1_temperature
+                name: CPU 1
+              - entity: sensor.moxxy_proxxy_disk_sda_st4000lm024_2an17v
+                name: Disk sda
+              - entity: sensor.moxxy_proxxy_disk_sdb_st4000lm024_2an17v
+                name: Disk sdb
+
+      - type: vertical-stack
+        cards:
+          - type: gauge
+            name: TrueNasty CPU
+            entity: sensor.truenasty_cpu_temperature
+            unit: °C
+            min: 20
+            max: 90
+            needle: true
+            severity: {green: 0, yellow: 65, red: 80}
+          - type: entities
+            title: TrueNasty
+            entities:
+              - entity: sensor.truenasty_cpu_temperature
+                name: CPU
+              - type: section
+                label: Disks
+              - entity: sensor.truenasty_disk_sdb_dev_sdb
+                name: Disk sdb
+              - entity: sensor.truenasty_disk_sdc_dev_sdc
+                name: Disk sdc
+              - entity: sensor.truenasty_disk_sdd_dev_sdd
+                name: Disk sdd
+              - entity: sensor.truenasty_disk_sde_dev_sde
+                name: Disk sde
+              - entity: sensor.truenasty_disk_sdf_dev_sdf
+                name: Disk sdf
+              - entity: sensor.truenasty_disk_sdg_dev_sdg
+                name: Disk sdg
+              - entity: sensor.truenasty_disk_sdh_dev_sdh
+                name: Disk sdh
+              - entity: sensor.truenasty_disk_sdi_dev_sdi
+                name: Disk sdi
+
+  # ============================ MEDIA ============================
+  - title: Media
+    path: media
+    icon: mdi:play-circle
+    cards:
+      - type: media-control
+        entity: media_player.living_room_apple_tv
+      - type: media-control
+        entity: media_player.living_room_mini
+      - type: media-control
+        entity: media_player.desk_1
+      - type: media-control
+        entity: media_player.bedroom_mini_1
+      - type: media-control
+        entity: media_player.bedroom_mini_2
+      - type: media-control
+        entity: media_player.home_assistant_voice_0a4a3f_media_player
+
+  # ============================ PEOPLE ============================
+  - title: People
+    path: people
+    icon: mdi:account-group
+    cards:
+      - type: map
+        entities:
+          - entity: person.rudi_du_toit
+          - entity: device_tracker.rudis_iphone_17
+        hours_to_show: 0
+
+      - type: entities
+        title: Rudi’s iPhone 17
+        entities:
+          - entity: sensor.rudis_iphone_17_battery_level
+            name: Battery
+          - entity: sensor.rudis_iphone_17_battery_state
+            name: Battery state
+          - entity: sensor.rudis_iphone_17_connection_type
+            name: Connection
+          - entity: sensor.rudis_iphone_17_ssid
+            name: Wi-Fi
+          - entity: sensor.rudis_iphone_17_steps
+            name: Steps
+          - entity: sensor.rudis_iphone_17_geocoded_location
+            name: Location
+
+  # ============================ SYSTEM ============================
+  - title: System
+    path: system
+    icon: mdi:cog
+    cards:
+      - type: entities
+        title: Backups
+        entities:
+          - entity: sensor.backup_backup_manager_state
+            name: Manager state
+          - entity: sensor.backup_last_successful_automatic_backup
+            name: Last successful
+          - entity: sensor.backup_next_scheduled_automatic_backup
+            name: Next scheduled
+
+      - type: entities
+        title: Core
+        entities:
+          - entity: update.home_assistant_core_update
+            name: Core
+          - entity: update.home_assistant_operating_system_update
+            name: OS
+          - entity: update.home_assistant_supervisor_update
+            name: Supervisor
+
+      - type: entities
+        title: Updates available
+        state_color: true
+        entities:
+          - entity: update.mosquitto_broker_update
+            name: Mosquitto
+          - entity: update.influxdb_update
+            name: InfluxDB
+          - entity: update.grafana_update
+            name: Grafana
+          - entity: update.file_editor_update
+            name: File editor
+          - entity: update.terminal_ssh_update
+            name: Terminal & SSH
+          - entity: update.samba_share_update
+            name: Samba
+          - entity: update.matter_server_update
+            name: Matter
+          - entity: update.esphome_device_builder_update
+            name: ESPHome
+          - entity: update.hacs_update
+            name: HACS
