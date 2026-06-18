@@ -32,21 +32,27 @@ if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 not found — install it first (e.g. apt install python3)" >&2
   exit 1
 fi
-# On Debian/Ubuntu the venv module ships in a separate package.
-if ! python3 -m venv --help >/dev/null 2>&1; then
+# On Debian/Ubuntu/Proxmox the pip bootstrap (ensurepip) ships in the
+# python3-venv package. The venv module itself is stdlib, so checking
+# `python3 -m venv --help` is not enough — probe ensurepip directly.
+if ! python3 -c "import ensurepip" >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     echo "   installing python3-venv via apt"
     apt-get update -qq && apt-get install -y python3-venv
   else
-    echo "python3 venv module unavailable; install python3-venv" >&2
+    echo "python3 ensurepip unavailable; install the python3-venv package" >&2
     exit 1
   fi
 fi
 
 echo "==> Creating virtualenv"
-# Discard a half-built venv left over from a previous failed run.
-if [[ -d "${APP_DIR}/venv" && ! -x "${APP_DIR}/venv/bin/python" ]]; then
-  rm -rf "${APP_DIR}/venv"
+# Discard a venv left over from a previous failed run (missing python or a
+# venv that came up without a working pip).
+if [[ -d "${APP_DIR}/venv" ]]; then
+  if [[ ! -x "${APP_DIR}/venv/bin/python" ]] \
+     || ! "${APP_DIR}/venv/bin/python" -m pip --version >/dev/null 2>&1; then
+    rm -rf "${APP_DIR}/venv"
+  fi
 fi
 if [[ ! -d "${APP_DIR}/venv" ]]; then
   python3 -m venv "${APP_DIR}/venv"
