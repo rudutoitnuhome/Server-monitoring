@@ -58,6 +58,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "cpu": {"enabled": True, "per_core": False},
     "disks": {"enabled": True, "skip_standby": True},
     "gpu": {"enabled": True},
+    "system": {"enabled": True},  # CPU usage, IO wait, memory, load average
 }
 
 CONFIG_SEARCH_PATHS = [
@@ -101,19 +102,39 @@ def slugify(value: str) -> str:
 # --------------------------------------------------------------------------- #
 
 class Reading:
-    """A single temperature measurement.
+    """A single measurement.
 
-    key:   stable identifier used as the JSON field + HA object id suffix
-    name:  human-friendly entity name shown in Home Assistant
-    value: temperature in degrees Celsius (float)
+    key:          stable identifier used as the JSON field + HA object id suffix
+    name:         human-friendly entity name shown in Home Assistant
+    value:        the measured value (float)
+    unit:         unit of measurement, or None for unitless (e.g. load average)
+    device_class: HA device class, or None
+    state_class:  HA state class (default "measurement")
+    icon:         optional mdi icon
+
+    Defaults describe a temperature in °C, so the temperature readers don't need
+    to pass anything extra.
     """
 
-    __slots__ = ("key", "name", "value")
+    __slots__ = ("key", "name", "value", "unit", "device_class", "state_class", "icon")
 
-    def __init__(self, key: str, name: str, value: float):
+    def __init__(
+        self,
+        key: str,
+        name: str,
+        value: float,
+        unit: str | None = "°C",
+        device_class: str | None = "temperature",
+        state_class: str | None = "measurement",
+        icon: str | None = None,
+    ):
         self.key = key
         self.name = name
         self.value = value
+        self.unit = unit
+        self.device_class = device_class
+        self.state_class = state_class
+        self.icon = icon
 
 
 def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess | None:
@@ -396,6 +417,100 @@ def read_gpu() -> list[Reading]:
     return readings
 
 
+# ---- System (CPU usage, IO wait, memory, load) ---------------------------- #
+
+# Previous /proc/stat snapshot, used to compute usage/iowait over the interval.
+_prev_cpu_times: tuple[int, int, int] | None = None
+
+
+def read_system() -> list[Reading]:
+    """Read CPU usage, IO wait, memory usage and load average from /proc."""
+    readings: list[Reading] = []
+    readings += _read_proc_stat()
+    readings += _read_memory()
+    readings += _read_loadavg()
+    return readings
+
+
+def _read_proc_stat() -> list[Reading]:
+    """CPU usage % and IO wait % from /proc/stat deltas between cycles."""
+    global _prev_cpu_times
+    if not os.path.exists("/proc/stat"):
+        return []
+    try:
+        with open("/proc/stat") as fh:
+            first = fh.readline()
+    except OSError:
+        return []
+    parts = first.split()
+    if not parts or parts[0] != "cpu" or len(parts) < 5:
+        return []
+    try:
+        nums = [int(x) for x in parts[1:]]
+    except ValueError:
+        return []
+
+    # fields: user nice system idle iowait irq softirq steal ...
+    total = sum(nums)
+    idle_all = nums[3] + nums[4]   # idle + iowait
+    iowait = nums[4]
+
+    readings: list[Reading] = []
+    if _prev_cpu_times is not None:
+        prev_total, prev_idle, prev_iowait = _prev_cpu_times
+        dt = total - prev_total
+        if dt > 0:
+            usage = (1 - (idle_all - prev_idle) / dt) * 100
+            iowait_pct = (iowait - prev_iowait) / dt * 100
+            readings.append(Reading(
+                "cpu_usage", "CPU Usage", round(max(0.0, usage), 1),
+                unit="%", device_class=None, icon="mdi:cpu-64-bit",
+            ))
+            readings.append(Reading(
+                "iowait", "IO Wait", round(max(0.0, iowait_pct), 1),
+                unit="%", device_class=None, icon="mdi:timer-sand",
+            ))
+    _prev_cpu_times = (total, idle_all, iowait)
+    return readings
+
+
+def _read_memory() -> list[Reading]:
+    """Memory used % from /proc/meminfo."""
+    if not os.path.exists("/proc/meminfo"):
+        return []
+    info: dict[str, int] = {}
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                key, _, rest = line.partition(":")
+                fields = rest.split()
+                if fields:
+                    info[key] = int(fields[0])  # value in kB
+    except (OSError, ValueError):
+        return []
+    total = info.get("MemTotal")
+    available = info.get("MemAvailable")
+    if not total or available is None:
+        return []
+    used_pct = (1 - available / total) * 100
+    return [Reading(
+        "memory_used", "Memory Used", round(used_pct, 1),
+        unit="%", device_class=None, icon="mdi:memory",
+    )]
+
+
+def _read_loadavg() -> list[Reading]:
+    """1-minute load average via os.getloadavg()."""
+    try:
+        load1 = os.getloadavg()[0]
+    except (OSError, AttributeError):
+        return []
+    return [Reading(
+        "load_1m", "CPU Load (1m)", round(load1, 2),
+        unit=None, device_class=None, icon="mdi:gauge",
+    )]
+
+
 # --------------------------------------------------------------------------- #
 # MQTT publisher with Home Assistant discovery
 # --------------------------------------------------------------------------- #
@@ -471,11 +586,16 @@ class Publisher:
             "state_topic": self.state_topic,
             "availability_topic": self.avail_topic,
             "value_template": f"{{{{ value_json.{reading.key} }}}}",
-            "unit_of_measurement": "°C",
-            "device_class": "temperature",
-            "state_class": "measurement",
             "device": self.device_block,
         }
+        if reading.unit is not None:
+            payload["unit_of_measurement"] = reading.unit
+        if reading.device_class is not None:
+            payload["device_class"] = reading.device_class
+        if reading.state_class is not None:
+            payload["state_class"] = reading.state_class
+        if reading.icon is not None:
+            payload["icon"] = reading.icon
         self.client.publish(topic, json.dumps(payload), qos=1, retain=True)
         self._announced.add(reading.key)
         log.debug("Announced %s", object_id)
@@ -500,6 +620,8 @@ def collect(cfg: dict) -> list[Reading]:
         readings += read_disks(cfg["disks"].get("skip_standby", True))
     if cfg["gpu"]["enabled"]:
         readings += read_gpu()
+    if cfg["system"]["enabled"]:
+        readings += read_system()
     return readings
 
 

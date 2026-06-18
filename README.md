@@ -1,18 +1,24 @@
 # Server Monitor → MQTT → Home Assistant
 
-A small Python agent that reads **CPU**, **hard-drive**, and **NVIDIA GPU**
-temperatures from a Linux host and publishes them to MQTT using
+A small Python agent that reads **CPU / hard-drive / NVIDIA GPU temperatures**
+plus **system load metrics** from a Linux host and publishes them to MQTT using
 **Home Assistant MQTT Discovery**. Run it on each machine (Proxmox,
-TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant
-with one temperature sensor per CPU / disk / GPU.
+TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 
 ## How it works
 
 | Metric | Source | Notes |
 |--------|--------|-------|
-| CPU temp | `sensors -j` (lm-sensors) | Falls back to `/sys/class/hwmon` if lm-sensors isn't installed. Optional per-core entities. |
+| CPU temp | `sensors -j` (lm-sensors) | Falls back to `/sys/class/hwmon` if lm-sensors isn't installed. One entity per socket; optional per-core entities. |
 | Disk temps | `smartctl` (smartmontools) | One entity per drive (SATA, SAS, NVMe). Skips drives in **standby** so it won't wake sleeping disks. |
 | GPU temps | `nvidia-smi` | One entity per NVIDIA GPU. Silently skipped when no GPU/driver is present. |
+| CPU usage % | `/proc/stat` | Utilisation averaged over the polling interval. |
+| IO wait % | `/proc/stat` | Share of CPU time spent waiting on I/O. |
+| Memory used % | `/proc/meminfo` | `1 − MemAvailable/MemTotal`. |
+| Load average (1m) | `os.getloadavg()` | 1-minute load average (unitless). |
+
+System metrics come from the kernel's `/proc` (no extra dependencies) and are
+toggled together by the `system` config block.
 
 The agent publishes a single retained JSON state topic per host plus a retained
 availability topic (with MQTT Last-Will), and HA discovery configs that map each

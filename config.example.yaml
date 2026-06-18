@@ -28,3 +28,6 @@ disks:
 
 gpu:
   enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)
+
+system:
+  enabled: true             # CPU usage %, IO wait %, memory used %, load average (1m)
