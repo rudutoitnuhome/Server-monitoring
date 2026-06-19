@@ -784,7 +784,8 @@ def _print_readings(node: str, readings: list[Reading]):
         return
     width = max(len(r.name) for r in readings)
     for r in readings:
-        print(f"  {r.name:<{width}}  {r.value:5.1f} °C   [{r.key}]")
+        unit = f" {r.unit}" if r.unit else ""
+        print(f"  {r.name:<{width}}  {r.value:>8.1f}{unit}   [{r.key}]")
     state = {r.key: round(r.value, 1) for r in readings}
     print(f"\nState JSON that would be published:\n  {json.dumps(state)}")
 
@@ -821,6 +822,10 @@ def main():
 
     if args.once:
         log.info("Dry run for node '%s' (no MQTT)", node)
+        # Rate metrics (CPU usage, IO wait, network throughput) need two samples
+        # to compute a delta, so prime the baselines, wait briefly, then print.
+        collect(cfg)
+        time.sleep(1.0)
         _print_readings(node, collect(cfg))
         return
 
