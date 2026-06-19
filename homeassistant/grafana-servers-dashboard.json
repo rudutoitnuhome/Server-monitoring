@@ -1,0 +1,259 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_INFLUXDB",
+      "label": "InfluxDB",
+      "description": "Home Assistant InfluxDB (database: homeassistant)",
+      "type": "datasource",
+      "pluginId": "influxdb",
+      "pluginName": "InfluxDB"
+    }
+  ],
+  "__requires": [
+    { "type": "datasource", "id": "influxdb", "name": "InfluxDB", "version": "1.0.0" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" }
+  ],
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["servers", "server-monitor"],
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "title": "Servers",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Temperatures",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU temperature",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 2,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "never", "spanNulls": true },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 65 }, { "color": "red", "value": 80 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"°C\" WHERE (\"entity_id\" =~ /cpu.*temperature$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk temperature",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 3,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "never", "spanNulls": true },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 45 }, { "color": "red", "value": 55 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"°C\" WHERE (\"entity_id\" =~ /disk_/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GPU temperature",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "id": 4,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "never", "spanNulls": true },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 85 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"°C\" WHERE (\"entity_id\" =~ /gpu/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Hottest disk per server (now)",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "id": 5,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 45 }, { "color": "red", "value": 55 } ] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"°C\" WHERE (\"entity_id\" =~ /hottest_disk$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Load",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "id": 6,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU usage",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 18 },
+      "id": 7,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"%\" WHERE (\"entity_id\" =~ /cpu_usage$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory used",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 18 },
+      "id": 8,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"%\" WHERE (\"entity_id\" =~ /memory_used$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "IO wait",
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 18 },
+      "id": 9,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "showPoints": "never", "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"%\" WHERE (\"entity_id\" =~ /io_wait$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "alias": "$tag_entity_id",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
