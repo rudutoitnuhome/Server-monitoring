@@ -67,9 +67,13 @@ bundles `lm-sensors` and `smartmontools`, so nothing is installed on the host.
 
 There are two ways to get the image. **Common to both:**
 
-- **Config on a dataset**: create e.g. `/mnt/<POOL>/apps/server-monitor/` and
-  put your edited `config.yaml` there (copy from `config.example.yaml`, set
-  `node_name: truenas`). `chmod 600` it — it holds the MQTT password.
+- **Config on a dataset**: create a dedicated **folder** e.g.
+  `/mnt/<POOL>/apps/server-monitor/` and put your edited `config.yaml` there
+  (copy from `config.example.yaml`, set `node_name: truenas`). The compose
+  mounts this **folder** to `/etc/server-monitor` (not the file directly) —
+  single-file bind mounts are unreliable on TrueNAS and can show up as an empty
+  directory inside the container, which makes the agent fall back to
+  `mqtt://localhost`. Keep only `config.yaml` in that folder.
 - The compose runs the container `privileged` with host `/dev` and `/sys`
   mounted so `smartctl` can read disk SMART data. CPU temps work too **if** the
   host has the relevant `hwmon`/`coretemp` modules loaded; disk temps work

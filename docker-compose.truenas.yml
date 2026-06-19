@@ -9,11 +9,18 @@
 #        git clone https://github.com/rudutoitnuhome/Server-monitoring.git
 #        cd Server-monitoring && docker build -t server-monitor:local .
 #      (Rebuild + restart the app to pick up new versions after a `git pull`.)
-#   2. Create the config dir, e.g.  /mnt/<POOL>/apps/server-monitor
-#      and put your edited config.yaml there (copy from config.example.yaml).
+#   2. Create a dedicated config DIRECTORY and put config.yaml in it:
+#        mkdir -p /mnt/<POOL>/apps/server-monitor
+#        cp config.example.yaml /mnt/<POOL>/apps/server-monitor/config.yaml
+#        # then edit that file (node_name + MQTT host/creds)
 #   3. Replace <POOL> below with your pool name.
 #
 # Notes:
+#   * The config is mounted as a DIRECTORY (.../server-monitor -> /etc/server-monitor).
+#     On TrueNAS SCALE a single-file bind mount is unreliable — the app layer
+#     can turn it into an empty directory, so the agent sees no config and falls
+#     back to mqtt://localhost. Mounting the folder avoids that. Keep only
+#     config.yaml in that folder.
 #   * Uses the locally-built image (pull_policy: never) so Docker never tries to
 #     pull from a registry. To use the GHCR image instead, set
 #       image: ghcr.io/rudutoitnuhome/server-monitor:latest
@@ -32,7 +39,7 @@ services:
     privileged: true              # required for smartctl disk access
     network_mode: host            # so it can reach the MQTT broker directly
     volumes:
-      - /mnt/<POOL>/apps/server-monitor/config.yaml:/etc/server-monitor/config.yaml:ro
+      - /mnt/<POOL>/apps/server-monitor:/etc/server-monitor:ro  # folder holding config.yaml
       - /dev:/dev                 # disk devices for smartctl
       - /sys:/sys:ro              # hwmon for CPU temps (best effort)
       - /run/udev:/run/udev:ro    # helps smartctl identify devices
