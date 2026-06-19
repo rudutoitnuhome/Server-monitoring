@@ -1,0 +1,364 @@
+# Bubble Card server-monitoring dashboard.
+# Requires Bubble Card v3.2.0+ (HACS -> Clooos/bubble-card).
+#
+# Main page: one summary button per host with metric sub-button chips
+# (CPU temp, hottest disk, CPU %, RAM, IO wait). Tap a host to open its pop-up,
+# which holds gauges, per-disk temps and a 24h history graph.
+#
+# To use: new dashboard -> raw configuration editor -> paste.
+
+title: Servers
+views:
+  - title: Servers
+    path: servers
+    icon: mdi:server
+    cards:
+
+      - type: custom:bubble-card
+        card_type: separator
+        name: Servers
+        icon: mdi:server-network
+
+      # ---------- Plex-Luthor (summary) ----------
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        name: Plex-Luthor
+        icon: mdi:server
+        tap_action:
+          action: navigate
+          navigation_path: '#plex'
+        sub_button:
+          - entity: sensor.plex_luthor_cpu_temperature
+            icon: mdi:thermometer
+            show_state: true
+            show_background: true
+          - entity: sensor.plex_luthor_hottest_disk
+            icon: mdi:harddisk
+            show_state: true
+            show_background: true
+          - entity: sensor.plex_luthor_cpu_usage
+            icon: mdi:cpu-64-bit
+            show_state: true
+            show_background: true
+          - entity: sensor.plex_luthor_memory_used
+            icon: mdi:memory
+            show_state: true
+            show_background: true
+          - entity: sensor.plex_luthor_io_wait
+            icon: mdi:timer-sand
+            show_state: true
+            show_background: true
+
+      # ---------- Moxxy-Proxxy (summary) ----------
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        name: Moxxy-Proxxy
+        icon: mdi:server
+        tap_action:
+          action: navigate
+          navigation_path: '#proxmox'
+        sub_button:
+          - entity: sensor.moxxy_proxxy_cpu_0_temperature
+            icon: mdi:thermometer
+            show_state: true
+            show_background: true
+          - entity: sensor.moxxy_proxxy_cpu_1_temperature
+            icon: mdi:thermometer
+            show_state: true
+            show_background: true
+          - entity: sensor.moxxy_proxxy_hottest_disk
+            icon: mdi:harddisk
+            show_state: true
+            show_background: true
+          - entity: sensor.moxxy_proxxy_cpu_usage
+            icon: mdi:cpu-64-bit
+            show_state: true
+            show_background: true
+          - entity: sensor.moxxy_proxxy_memory_used
+            icon: mdi:memory
+            show_state: true
+            show_background: true
+          - entity: sensor.moxxy_proxxy_io_wait
+            icon: mdi:timer-sand
+            show_state: true
+            show_background: true
+
+      # ---------- TrueNasty (summary) ----------
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        name: TrueNasty
+        icon: mdi:nas
+        tap_action:
+          action: navigate
+          navigation_path: '#truenas'
+        sub_button:
+          - entity: sensor.truenasty_cpu_temperature
+            icon: mdi:thermometer
+            show_state: true
+            show_background: true
+          - entity: sensor.truenasty_hottest_disk
+            icon: mdi:harddisk
+            show_state: true
+            show_background: true
+          - entity: sensor.truenasty_cpu_usage
+            icon: mdi:cpu-64-bit
+            show_state: true
+            show_background: true
+          - entity: sensor.truenasty_memory_used
+            icon: mdi:memory
+            show_state: true
+            show_background: true
+          - entity: sensor.truenasty_io_wait
+            icon: mdi:timer-sand
+            show_state: true
+            show_background: true
+
+      # ===================== POP-UPS =====================
+
+      # ---------- Plex-Luthor (detail) ----------
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#plex'
+        name: Plex-Luthor
+        icon: mdi:server
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU
+                entity: sensor.plex_luthor_cpu_temperature
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 65, red: 80}
+              - type: gauge
+                name: SSD
+                entity: sensor.plex_luthor_hottest_disk
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 55, red: 70}
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU %
+                entity: sensor.plex_luthor_cpu_usage
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 70, red: 90}
+              - type: gauge
+                name: RAM
+                entity: sensor.plex_luthor_memory_used
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 75, red: 90}
+              - type: gauge
+                name: IO Wait
+                entity: sensor.plex_luthor_io_wait
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 15, red: 40}
+          - type: history-graph
+            hours_to_show: 24
+            min_y_axis: 15
+            max_y_axis: 90
+            entities:
+              - sensor.plex_luthor_cpu_temperature
+              - sensor.plex_luthor_disk_sda_samsung_ssd_870_evo_500gb
+
+      # ---------- Moxxy-Proxxy (detail) ----------
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#proxmox'
+        name: Moxxy-Proxxy
+        icon: mdi:server
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU 0
+                entity: sensor.moxxy_proxxy_cpu_0_temperature
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 65, red: 80}
+              - type: gauge
+                name: CPU 1
+                entity: sensor.moxxy_proxxy_cpu_1_temperature
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 65, red: 80}
+              - type: gauge
+                name: HDDs
+                entity: sensor.moxxy_proxxy_hottest_disk
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 45, red: 55}
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU %
+                entity: sensor.moxxy_proxxy_cpu_usage
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 70, red: 90}
+              - type: gauge
+                name: RAM
+                entity: sensor.moxxy_proxxy_memory_used
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 75, red: 90}
+              - type: gauge
+                name: IO Wait
+                entity: sensor.moxxy_proxxy_io_wait
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 15, red: 40}
+          - type: history-graph
+            hours_to_show: 24
+            min_y_axis: 15
+            max_y_axis: 90
+            entities:
+              - sensor.moxxy_proxxy_cpu_0_temperature
+              - sensor.moxxy_proxxy_cpu_1_temperature
+              - sensor.moxxy_proxxy_disk_sda_st4000lm024_2an17v
+              - sensor.moxxy_proxxy_disk_sdb_st4000lm024_2an17v
+
+      # ---------- TrueNasty (detail) ----------
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: '#truenas'
+        name: TrueNasty
+        icon: mdi:nas
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU
+                entity: sensor.truenasty_cpu_temperature
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 65, red: 80}
+              - type: gauge
+                name: HDDs
+                entity: sensor.truenasty_hottest_disk
+                unit: °C
+                min: 20
+                max: 90
+                needle: true
+                severity: {green: 0, yellow: 45, red: 55}
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                name: CPU %
+                entity: sensor.truenasty_cpu_usage
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 70, red: 90}
+              - type: gauge
+                name: RAM
+                entity: sensor.truenasty_memory_used
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 75, red: 90}
+              - type: gauge
+                name: IO Wait
+                entity: sensor.truenasty_io_wait
+                unit: "%"
+                min: 0
+                max: 100
+                needle: true
+                severity: {green: 0, yellow: 15, red: 40}
+          - type: custom:bubble-card
+            card_type: separator
+            name: Disks
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdb_dev_sdb
+            name: Disk sdb
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdc_dev_sdc
+            name: Disk sdc
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdd_dev_sdd
+            name: Disk sdd
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sde_dev_sde
+            name: Disk sde
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdf_dev_sdf
+            name: Disk sdf
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdg_dev_sdg
+            name: Disk sdg
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdh_dev_sdh
+            name: Disk sdh
+            icon: mdi:harddisk
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: sensor.truenasty_disk_sdi_dev_sdi
+            name: Disk sdi
+            icon: mdi:harddisk
+          - type: history-graph
+            hours_to_show: 24
+            min_y_axis: 15
+            max_y_axis: 90
+            entities:
+              - sensor.truenasty_disk_sdb_dev_sdb
+              - sensor.truenasty_disk_sdc_dev_sdc
+              - sensor.truenasty_disk_sdd_dev_sdd
+              - sensor.truenasty_disk_sde_dev_sde
+              - sensor.truenasty_disk_sdf_dev_sdf
+              - sensor.truenasty_disk_sdg_dev_sdg
+              - sensor.truenasty_disk_sdh_dev_sdh
+              - sensor.truenasty_disk_sdi_dev_sdi
