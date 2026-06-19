@@ -17,11 +17,15 @@ template:
         state_class: measurement
         availability: >
           {{ states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | list | count > 0 }}
         state: >
           {% set temps = states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | map(attribute='state') | map('float', 0) | list %}
@@ -30,7 +34,9 @@ template:
           hottest_drive: >
             {% set ns = namespace(name=none, temp=-273) %}
             {% for s in states.sensor
-               | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+               | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
+             | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
                | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
               {% if s.state | float(0) > ns.temp %}
                 {% set ns.temp = s.state | float(0) %}
@@ -46,11 +52,15 @@ template:
         state_class: measurement
         availability: >
           {{ states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | list | count > 0 }}
         state: >
           {% set temps = states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | map(attribute='state') | map('float', 0) | list %}
@@ -59,7 +69,9 @@ template:
           hottest_drive: >
             {% set ns = namespace(name=none, temp=-273) %}
             {% for s in states.sensor
-               | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
+               | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
+             | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
                | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
               {% if s.state | float(0) > ns.temp %}
                 {% set ns.temp = s.state | float(0) %}
@@ -75,11 +87,15 @@ template:
         state_class: measurement
         availability: >
           {{ states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | list | count > 0 }}
         state: >
           {% set temps = states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | map(attribute='state') | map('float', 0) | list %}
@@ -88,7 +104,9 @@ template:
           hottest_drive: >
             {% set ns = namespace(name=none, temp=-273) %}
             {% for s in states.sensor
-               | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+               | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
+             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
                | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
               {% if s.state | float(0) > ns.temp %}
                 {% set ns.temp = s.state | float(0) %}
