@@ -4,11 +4,20 @@
 # and paste this file.
 #
 # Before installing:
-#   1. Create a dataset/dir for the config, e.g.  /mnt/<POOL>/apps/server-monitor
-#   2. Put your edited config.yaml there (copy from config.example.yaml).
+#   1. Build the image on TrueNAS (root shell):
+#        cd /mnt/<POOL>/apps
+#        git clone https://github.com/rudutoitnuhome/Server-monitoring.git
+#        cd Server-monitoring && docker build -t server-monitor:local .
+#      (Rebuild + restart the app to pick up new versions after a `git pull`.)
+#   2. Create the config dir, e.g.  /mnt/<POOL>/apps/server-monitor
+#      and put your edited config.yaml there (copy from config.example.yaml).
 #   3. Replace <POOL> below with your pool name.
 #
 # Notes:
+#   * Uses the locally-built image (pull_policy: never) so Docker never tries to
+#     pull from a registry. To use the GHCR image instead, set
+#       image: ghcr.io/rudutoitnuhome/server-monitor:latest
+#     and remove pull_policy.
 #   * privileged + host /dev are required so smartctl can read disk SMART data.
 #   * /sys is mounted read-only so lm-sensors can read CPU temps *if* the host
 #     has the relevant hwmon modules loaded (disk temps work regardless).
@@ -16,7 +25,8 @@
 
 services:
   server-monitor:
-    image: ghcr.io/rudutoitnuhome/server-monitor:latest
+    image: server-monitor:local  # built locally with `docker build -t server-monitor:local .`
+    pull_policy: never           # use the local image; never pull from a registry
     container_name: server-monitor
     restart: unless-stopped
     privileged: true              # required for smartctl disk access

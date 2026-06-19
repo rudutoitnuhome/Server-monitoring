@@ -75,9 +75,10 @@ There are two ways to get the image. **Common to both:**
   host has the relevant `hwmon`/`coretemp` modules loaded; disk temps work
   regardless. No GPU temps (no NVIDIA runtime) — fine, the NAS has no GPU.
 
-### Option A — build the image on TrueNAS (no registry needed)
+### Option A — build the image on TrueNAS (no registry needed) — default
 
-Works with no external dependencies. From a root shell on TrueNAS:
+`docker-compose.truenas.yml` is already set up for this (`image: server-monitor:local`,
+`pull_policy: never`). From a root shell on TrueNAS:
 
 ```bash
 cd /mnt/<POOL>/apps
@@ -86,27 +87,21 @@ cd Server-monitoring
 docker build -t server-monitor:local .
 ```
 
-Then install the Custom App with
-[`docker-compose.truenas.yml`](docker-compose.truenas.yml), but change the image
-line to the locally-built one so Docker doesn't try to pull it:
-
-```yaml
-    image: server-monitor:local
-    pull_policy: never
-```
+Rebuild and restart the app to pick up new versions after a `git pull`.
 
 ### Option B — pull from GHCR (needs GitHub Actions working)
 
 The workflow publishes `ghcr.io/rudutoitnuhome/server-monitor:latest` on every
 push. After the first successful run, set the package visibility to **Public**
 (`github.com/users/rudutoitnuhome/packages/container/server-monitor` → *Package
-settings*) so TrueNAS can pull without credentials, then use the compose as-is.
+settings*) so TrueNAS can pull without credentials. Then, in the compose, set
+`image: ghcr.io/rudutoitnuhome/server-monitor:latest` and remove `pull_policy`.
 
 ### Install the Custom App
 
 TrueNAS UI → **Apps → Discover Apps → Custom App → Install via YAML**, paste
 [`docker-compose.truenas.yml`](docker-compose.truenas.yml), and replace `<POOL>`
-with your pool name (plus the image tweak above if you built locally).
+with your pool name.
 
 Check logs from the app's shell or:
 
