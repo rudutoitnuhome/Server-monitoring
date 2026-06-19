@@ -52,13 +52,28 @@ sensors-detect --auto        # one-time, for CPU sensors
 git clone git@github.com:rudutoitnuhome/Server-monitoring.git
 cd Server-monitoring
 sudo ./install.sh
-sudo nano /etc/server-monitor/config.yaml   # set MQTT broker + node_name
-sudo systemctl start server-monitor
+sudo nano /etc/server-monitor/config.yaml   # <-- EDIT THE LIVE FILE (see below)
+sudo systemctl restart server-monitor
 journalctl -u server-monitor -f
 ```
 
+> **⚠️ Edit `/etc/server-monitor/config.yaml`, not the repo's `config.yaml`.**
+> `install.sh` copies the template to `/etc/server-monitor/config.yaml`, and the
+> systemd service reads **only** that file. Editing the cloned repo's
+> `config.yaml` has no effect on the service. If you prefer to keep your edits in
+> the repo, copy them over the live file and restart:
+>
+> ```bash
+> sudo cp config.yaml /etc/server-monitor/config.yaml
+> sudo chmod 600 /etc/server-monitor/config.yaml   # keep the MQTT password root-only
+> sudo systemctl restart server-monitor
+> ```
+>
+> Symptom of editing the wrong file: the log shows `Monitoring node 'proxmox'`
+> (the template default) and `Could not connect to MQTT broker: timed out`.
+
 Repeat on each machine, giving each a distinct `node_name`
-(e.g. `proxmox`, `plex`).
+(e.g. `proxmox`, `plex`, `arrthings`).
 
 ## TrueNAS SCALE (Docker / Custom App)
 
