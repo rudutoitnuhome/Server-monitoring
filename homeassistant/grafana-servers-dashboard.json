@@ -519,7 +519,7 @@
           "rawQuery": true,
           "resultFormat": "time_series",
           "alias": "$tag_entity_id",
-          "query": "SELECT mean(\"value\") FROM \"sensor\" WHERE (\"entity_id\" =~ /^($host)_cpu_load_(1m|5m|15m)$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)"
+          "query": "SELECT mean(\"value\") FROM \"state\" WHERE (\"entity_id\" =~ /^($host)_cpu_load_(1m|5m|15m)$/) AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(null)"
         }
       ]
     },
