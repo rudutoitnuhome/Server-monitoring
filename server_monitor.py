@@ -58,7 +58,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "cpu": {"enabled": True, "per_core": False},
     "disks": {"enabled": True, "skip_standby": True},
     "gpu": {"enabled": True},
-    "system": {"enabled": True},  # CPU usage, IO wait, memory, load average
+    "system": {"enabled": True},  # CPU usage, IO wait, memory, load average, uptime
+    "network": {
+        "enabled": True,
+        # Interfaces whose name equals or starts with any of these are skipped.
+        "exclude": [
+            "lo", "docker", "veth", "br-", "virbr", "vnet", "tap",
+            "fwbr", "fwln", "fwpr", "dummy", "kube", "cni", "flannel",
+        ],
+    },
+    "filesystems": {"enabled": True, "mounts": ["/"]},  # used % + free GB per mount
 }
 
 CONFIG_SEARCH_PATHS = [
@@ -424,11 +433,12 @@ _prev_cpu_times: tuple[int, int, int] | None = None
 
 
 def read_system() -> list[Reading]:
-    """Read CPU usage, IO wait, memory usage and load average from /proc."""
+    """Read CPU usage, IO wait, memory, load average and uptime from /proc."""
     readings: list[Reading] = []
     readings += _read_proc_stat()
     readings += _read_memory()
     readings += _read_loadavg()
+    readings += _read_uptime()
     return readings
 
 
@@ -493,22 +503,150 @@ def _read_memory() -> list[Reading]:
     if not total or available is None:
         return []
     used_pct = (1 - available / total) * 100
-    return [Reading(
-        "memory_used", "Memory Used", round(used_pct, 1),
-        unit="%", device_class=None, icon="mdi:memory",
-    )]
+    used_gb = (total - available) / 1024 / 1024   # kB -> GiB
+    total_gb = total / 1024 / 1024
+    return [
+        Reading("memory_used", "Memory Used", round(used_pct, 1),
+                unit="%", device_class=None, icon="mdi:memory"),
+        Reading("memory_used_gb", "Memory Used (GB)", round(used_gb, 1),
+                unit="GB", device_class="data_size", icon="mdi:memory"),
+        Reading("memory_total_gb", "Memory Total (GB)", round(total_gb, 1),
+                unit="GB", device_class="data_size", icon="mdi:memory"),
+    ]
 
 
 def _read_loadavg() -> list[Reading]:
-    """1-minute load average via os.getloadavg()."""
+    """1/5/15-minute load averages via os.getloadavg()."""
     try:
-        load1 = os.getloadavg()[0]
+        load1, load5, load15 = os.getloadavg()
     except (OSError, AttributeError):
         return []
+    return [
+        Reading("load_1m", "CPU Load (1m)", round(load1, 2),
+                unit=None, device_class=None, icon="mdi:gauge"),
+        Reading("load_5m", "CPU Load (5m)", round(load5, 2),
+                unit=None, device_class=None, icon="mdi:gauge"),
+        Reading("load_15m", "CPU Load (15m)", round(load15, 2),
+                unit=None, device_class=None, icon="mdi:gauge"),
+    ]
+
+
+def _read_uptime() -> list[Reading]:
+    """System uptime in days from /proc/uptime."""
+    raw = _read_text("/proc/uptime")
+    if not raw:
+        return []
+    try:
+        seconds = float(raw.split()[0])
+    except (ValueError, IndexError):
+        return []
     return [Reading(
-        "load_1m", "CPU Load (1m)", round(load1, 2),
-        unit=None, device_class=None, icon="mdi:gauge",
+        "uptime_days", "Uptime", round(seconds / 86400, 2),
+        unit="d", device_class="duration", icon="mdi:clock-outline",
     )]
+
+
+# ---- Network -------------------------------------------------------------- #
+
+# Previous /proc/net/dev counters per interface: name -> (rx_bytes, tx_bytes, monotonic)
+_prev_net: dict[str, tuple[int, int, float]] = {}
+
+
+def read_network(cfg_net: dict) -> list[Reading]:
+    """Per-interface throughput (Mbit/s) and negotiated link speed."""
+    if not os.path.exists("/proc/net/dev"):
+        return []
+    exclude = cfg_net.get("exclude", [])
+    try:
+        with open("/proc/net/dev") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return []
+
+    now = time.monotonic()
+    readings: list[Reading] = []
+    for line in lines[2:]:  # first two lines are headers
+        name, _, rest = line.partition(":")
+        name = name.strip()
+        if not name or _iface_excluded(name, exclude):
+            continue
+        fields = rest.split()
+        if len(fields) < 16:
+            continue
+        try:
+            rx_bytes, tx_bytes = int(fields[0]), int(fields[8])
+        except ValueError:
+            continue
+
+        slug = slugify(name)
+        speed = _iface_speed(name)
+        if speed is not None:
+            readings.append(Reading(
+                f"net_{slug}_speed", f"{name} Link Speed", float(speed),
+                unit="Mbit/s", device_class="data_rate", icon="mdi:ethernet",
+            ))
+
+        prev = _prev_net.get(name)
+        _prev_net[name] = (rx_bytes, tx_bytes, now)
+        if prev is not None:
+            prx, ptx, pt = prev
+            dt = now - pt
+            # Guard against counter resets (iface down, reboot).
+            if dt > 0 and rx_bytes >= prx and tx_bytes >= ptx:
+                rx_mbps = (rx_bytes - prx) * 8 / 1e6 / dt
+                tx_mbps = (tx_bytes - ptx) * 8 / 1e6 / dt
+                readings.append(Reading(
+                    f"net_{slug}_rx", f"{name} In", round(rx_mbps, 2),
+                    unit="Mbit/s", device_class="data_rate",
+                    icon="mdi:download-network",
+                ))
+                readings.append(Reading(
+                    f"net_{slug}_tx", f"{name} Out", round(tx_mbps, 2),
+                    unit="Mbit/s", device_class="data_rate",
+                    icon="mdi:upload-network",
+                ))
+    return readings
+
+
+def _iface_excluded(name: str, patterns: list[str]) -> bool:
+    return any(name == p or name.startswith(p) for p in patterns)
+
+
+def _iface_speed(name: str) -> int | None:
+    """Negotiated link speed in Mbit/s, or None for virtual/down interfaces."""
+    raw = _read_text(f"/sys/class/net/{name}/speed")
+    if raw and raw.lstrip("-").isdigit():
+        value = int(raw)
+        return value if value > 0 else None
+    return None
+
+
+# ---- Filesystems ---------------------------------------------------------- #
+
+def read_filesystems(mounts: list[str]) -> list[Reading]:
+    """Used % and free space (GB) for each configured mountpoint."""
+    readings: list[Reading] = []
+    for mount in mounts:
+        try:
+            st = os.statvfs(mount)
+        except OSError:
+            log.debug("statvfs failed for %s", mount)
+            continue
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        if total <= 0:
+            continue
+        used_pct = (total - free) / total * 100
+        slug = slugify(mount) or "root"
+        readings.append(Reading(
+            f"fs_{slug}_used", f"Disk {mount} Used", round(used_pct, 1),
+            unit="%", device_class=None, icon="mdi:harddisk",
+        ))
+        readings.append(Reading(
+            f"fs_{slug}_free_gb", f"Disk {mount} Free", round(free / 1024**3, 1),
+            unit="GB", device_class="data_size", icon="mdi:harddisk",
+        ))
+    return readings
 
 
 # --------------------------------------------------------------------------- #
@@ -622,6 +760,10 @@ def collect(cfg: dict) -> list[Reading]:
         readings += read_gpu()
     if cfg["system"]["enabled"]:
         readings += read_system()
+    if cfg["network"]["enabled"]:
+        readings += read_network(cfg["network"])
+    if cfg["filesystems"]["enabled"]:
+        readings += read_filesystems(cfg["filesystems"].get("mounts", ["/"]))
     return readings
 
 

@@ -14,11 +14,17 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 | GPU temps | `nvidia-smi` | One entity per NVIDIA GPU. Silently skipped when no GPU/driver is present. |
 | CPU usage % | `/proc/stat` | Utilisation averaged over the polling interval. |
 | IO wait % | `/proc/stat` | Share of CPU time spent waiting on I/O. |
-| Memory used % | `/proc/meminfo` | `1 − MemAvailable/MemTotal`. |
-| Load average (1m) | `os.getloadavg()` | 1-minute load average (unitless). |
+| Memory used | `/proc/meminfo` | Used %, plus used/total in GB. |
+| Load average | `os.getloadavg()` | 1m / 5m / 15m (unitless). |
+| Uptime | `/proc/uptime` | Days since boot. |
+| Network throughput | `/proc/net/dev` | Per-interface in/out in Mbit/s (rate over the interval). |
+| Link speed | `/sys/class/net/*/speed` | Negotiated interface speed (Mbit/s). |
+| Filesystem usage | `os.statvfs` | Used % + free GB per configured mountpoint. |
 
-System metrics come from the kernel's `/proc` (no extra dependencies) and are
-toggled together by the `system` config block.
+System/network/filesystem metrics come from the kernel's `/proc` and `/sys`
+(no extra dependencies), toggled by the `system`, `network` and `filesystems`
+config blocks. Network excludes virtual interfaces (loopback, docker, veth,
+bridges, etc.) by default; filesystems default to monitoring `/`.
 
 The agent publishes a single retained JSON state topic per host plus a retained
 availability topic (with MQTT Last-Will), and HA discovery configs that map each

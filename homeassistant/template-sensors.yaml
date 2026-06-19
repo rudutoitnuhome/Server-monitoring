@@ -96,3 +96,40 @@ template:
               {% endif %}
             {% endfor %}
             {{ ns.name }}
+
+      # Hottest disk across ALL servers (matches every *_disk_* temperature
+      # sensor, so new hosts/disks are included automatically).
+      - name: Servers Hottest Disk
+        unique_id: servers_hottest_disk
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        availability: >
+          {{ states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
+             | selectattr('entity_id', 'search', '_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | list | count > 0 }}
+        state: >
+          {% set temps = states.sensor
+             | selectattr('attributes.device_class', 'defined')
+             | selectattr('attributes.device_class', 'eq', 'temperature')
+             | selectattr('entity_id', 'search', '_disk_')
+             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
+             | map(attribute='state') | map('float', 0) | list %}
+          {{ max(temps) | round(1) if temps else none }}
+        attributes:
+          hottest_drive: >
+            {% set ns = namespace(name=none, temp=-273) %}
+            {% for s in states.sensor
+               | selectattr('attributes.device_class', 'defined')
+               | selectattr('attributes.device_class', 'eq', 'temperature')
+               | selectattr('entity_id', 'search', '_disk_')
+               | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
+              {% if s.state | float(0) > ns.temp %}
+                {% set ns.temp = s.state | float(0) %}
+                {% set ns.name = s.name %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.name }}

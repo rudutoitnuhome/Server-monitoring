@@ -30,4 +30,27 @@ gpu:
   enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)
 
 system:
-  enabled: true             # CPU usage %, IO wait %, memory used %, load average (1m)
+  enabled: true             # CPU usage %, IO wait %, memory (% + GB), load avg (1/5/15m), uptime
+
+network:
+  enabled: true             # per-interface throughput (Mbit/s) + link speed
+  exclude:                  # interfaces equal to / starting with these are skipped
+    - lo
+    - docker
+    - veth
+    - br-
+    - virbr
+    - vnet
+    - tap
+    - fwbr
+    - fwln
+    - fwpr
+    - dummy
+    - kube
+    - cni
+    - flannel
+
+filesystems:
+  enabled: true             # used % + free GB per mountpoint
+  mounts:
+    - /                     # add more, e.g. /mnt/tank, /var/lib (host paths in a container)
