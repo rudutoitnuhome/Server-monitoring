@@ -181,23 +181,30 @@ journalctl -u fan-controller -f
 > use it to confirm the curve picks sane values before handing over real control.
 > Needs `ipmitool` on the host (`apt install ipmitool`).
 
-### Huawei iBMC (Redfish)
+### Huawei (iMana 200 / iBMC)
 
-Huawei controls fans over the **Redfish API** (HTTPS on the BMC), not raw IPMI.
-Set `ipmi.vendor: huawei` and fill in the `redfish:` block (host, credentials).
-Because the fan-control payload shape varies by iBMC firmware, the manual / set-
-speed / auto actions are **config-driven** — confirm them against your box:
+Huawei controls fans over **SNMP** (the Huawei enterprise MIB), not raw IPMI or
+Redfish — and the older **iMana 200 has no Redfish at all**, so SNMP is the
+path. Set `ipmi.vendor: huawei` and fill in the `snmp:` block. Prerequisites:
 
 ```bash
-# read-only: dumps the iBMC Chassis + Thermal schema
+apt install snmp        # net-snmp snmpset/snmpwalk
+```
+…and on the BMC, enable **SNMP v2c with a read-write community**.
+
+```bash
+# read-only: walk the Huawei fan OID subtree (and ambient temps if ipmi configured)
 sudo /opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py --probe
 ```
 
-Check the dumped `Thermal` resource for the Huawei `Oem` fan fields (e.g.
-`FanSpeedAdjustmentMode`, the per-percent field name) and adjust
-`redfish.manual_mode` / `set_speed` / `auto_mode` to match. If a Huawei command
-is wrong it errors and the BMC keeps managing the fans (safe). The `requests`
-package is required for this backend (installed by `install.sh`).
+The default OIDs (`.1.3.6.1.4.1.2011.2.235.1.1.8.*`) are the known-working set;
+if `--probe` shows a different subtree, override `snmp.manual_oid` / `speed_oid`.
+A wrong SNMP set just errors and the BMC keeps managing the fans (safe).
+
+> The SNMP fan OIDs are verified on iBMC (RH2288H v3); the same Huawei MIB is
+> expected on iMana 200 but **confirm on your box with `--probe` + `--dry-run`
+> before enabling the service**. Newer iBMC servers can alternatively use
+> `vendor: huawei-redfish` with a `redfish:` block.
 
 ## Configuration
 

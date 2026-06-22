@@ -21,30 +21,35 @@ ipmi:
   password: changeme
   interface: lanplus
 
-# Only used when ipmi.vendor: huawei. Huawei iBMC controls fans over Redfish
-# (HTTPS on the BMC), not raw IPMI. Run `fan_controller.py --probe` to dump your
-# iBMC's Thermal schema, then confirm the manual_mode/set_speed/auto_mode actions
-# below match it (the FanSpeedLevelPercents field name/shape varies by firmware).
-# A payload value of exactly "{percent}" is replaced with the integer fan %.
+# --- Huawei (vendor: huawei) — iMana 200 AND iBMC, via SNMP ----------------
+# Huawei controls fans over SNMP using the Huawei enterprise MIB, NOT raw IPMI
+# or Redfish (iMana 200 has no Redfish). Requirements on the host:
+#   apt install snmp           # net-snmp snmpset/snmpwalk
+# and on the BMC: enable SNMP v2c with a READ-WRITE community.
+# The OIDs/values below are the known-working set; confirm with --probe.
+# snmp:
+#   host: 192.168.4.7
+#   community: your-readwrite-community
+#   version: "2c"
+#   # defaults (override only if --probe shows different):
+#   # manual_oid: .1.3.6.1.4.1.2011.2.235.1.1.8.1.0
+#   # manual_value: "1,0"
+#   # speed_oid:  .1.3.6.1.4.1.2011.2.235.1.1.8.2.0
+#   # auto_value:  "0"
+#   # Optional: ambient temps via ipmitool (iMana supports standard IPMI):
+#   ipmi:
+#     host: 192.168.4.7
+#     username: ipmi
+#     password: changeme
+#     interface: lanplus
+#
+# --- Huawei newer iBMC only (vendor: huawei-redfish), via Redfish -----------
 # redfish:
 #   host: 192.168.4.7
 #   username: Administrator
 #   password: changeme
 #   verify_tls: false
 #   chassis_id: "1"
-#   thermal_path: /redfish/v1/Chassis/{chassis}/Thermal
-#   manual_mode:
-#     method: PATCH
-#     path: /redfish/v1/Chassis/{chassis}/Thermal
-#     payload: {Oem: {Huawei: {FanSpeedAdjustmentMode: Manual}}}
-#   set_speed:
-#     method: PATCH
-#     path: /redfish/v1/Chassis/{chassis}/Thermal
-#     payload: {Oem: {Huawei: {FanSpeedAdjustmentMode: Manual, FanSpeedLevelPercents: "{percent}"}}}
-#   auto_mode:
-#     method: PATCH
-#     path: /redfish/v1/Chassis/{chassis}/Thermal
-#     payload: {Oem: {Huawei: {FanSpeedAdjustmentMode: Automatic}}}
 
 # Temperature inputs. `node` is a server_monitor node; keys/key_regex are its
 # state-JSON keys (the [bracketed] names in `server_monitor.py --once`).

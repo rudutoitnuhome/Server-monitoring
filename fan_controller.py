@@ -90,6 +90,25 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "payload": {"Oem": {"Huawei": {"FanSpeedAdjustmentMode": "Automatic"}}},
         },
     },
+    # Huawei iMana 200 / iBMC fan control via SNMP (vendor: huawei). Uses the
+    # Huawei enterprise MIB (.1.3.6.1.4.1.2011...). Requires SNMP v2c with a
+    # READ-WRITE community enabled on the BMC, and the net-snmp tools
+    # (apt install snmp). OIDs/values default to the known-working set; confirm
+    # with `--probe`. The optional `ipmi` sub-block enables ambient temps via
+    # ipmitool (iMana supports standard IPMI sdr).
+    "snmp": {
+        "host": None,
+        "community": None,        # the read-write community string
+        "version": "2c",
+        "manual_oid": ".1.3.6.1.4.1.2011.2.235.1.1.8.1.0",
+        "manual_type": "s",
+        "manual_value": "1,0",
+        "auto_value": "0",
+        "speed_oid": ".1.3.6.1.4.1.2011.2.235.1.1.8.2.0",
+        "speed_type": "i",
+        "walk_base": ".1.3.6.1.4.1.2011.2.235.1.1.8",   # for --probe
+        "ipmi": None,             # optional {host, username, password} -> ambient temps
+    },
     # Temperature inputs. Each source names a server-monitor node and either an
     # explicit list of state-JSON keys or a regex over keys. (Keys are the values
     # in the [brackets] of `server_monitor.py --once`, e.g. cpu0_temp, gpu0_temp,
@@ -310,12 +329,66 @@ class HuaweiRedfish:
                 "\n\n=== Thermal ===\n" + json.dumps(thermal, indent=2))
 
 
+class HuaweiSnmp:
+    """Huawei iMana 200 / iBMC fan control via SNMP (Huawei enterprise MIB).
+
+    Works on the older iMana 200 (which has no Redfish) as well as iBMC. Needs a
+    read-write SNMP v2c community on the BMC and the net-snmp `snmpset`/`snmpwalk`
+    tools. Optionally reads ambient temps via ipmitool.
+    """
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        if not cfg.get("host") or not cfg.get("community"):
+            raise IpmiError("snmp.host and snmp.community are required for the huawei vendor")
+        self.host = cfg["host"]
+        self.community = cfg["community"]
+        self.version = str(cfg.get("version", "2c"))
+        self._ipmi = DellIpmi(cfg["ipmi"]) if cfg.get("ipmi") else None  # ambient only
+
+    def _set(self, oid: str, typ: str, value):
+        cmd = ["snmpset", f"-v{self.version}", "-c", self.community,
+               self.host, oid, typ, str(value)]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        if proc.returncode != 0:
+            raise IpmiError(f"snmpset {oid} failed: {proc.stderr.strip() or proc.stdout.strip()}")
+
+    def begin_manual(self):
+        self._set(self.cfg["manual_oid"], self.cfg["manual_type"], self.cfg["manual_value"])
+
+    def set_percent(self, percent: int):
+        percent = max(0, min(100, int(percent)))
+        # Ensure manual mode is asserted, then set the speed.
+        self._set(self.cfg["manual_oid"], self.cfg["manual_type"], self.cfg["manual_value"])
+        self._set(self.cfg["speed_oid"], self.cfg["speed_type"], percent)
+
+    def restore_auto(self):
+        self._set(self.cfg["manual_oid"], self.cfg["manual_type"], self.cfg["auto_value"])
+
+    def read_temperatures(self) -> list[tuple[str, float]]:
+        return self._ipmi.read_temperatures() if self._ipmi else []
+
+    def probe(self) -> str:
+        cmd = ["snmpwalk", f"-v{self.version}", "-c", self.community,
+               self.host, self.cfg["walk_base"]]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        out = f"=== snmpwalk {self.cfg['walk_base']} ===\n{proc.stdout}{proc.stderr}"
+        if self._ipmi:
+            try:
+                out += "\n=== ipmitool temperatures ===\n" + self._ipmi.probe()
+            except (IpmiError, subprocess.SubprocessError) as exc:
+                out += f"\n(ipmitool temps unavailable: {exc})"
+        return out
+
+
 def make_ipmi(cfg: dict):
     """Build the BMC backend from the full config (vendor under ipmi.vendor)."""
     vendor = (cfg.get("ipmi", {}).get("vendor") or "dell").lower()
     if vendor == "dell":
         return DellIpmi(cfg["ipmi"])
-    if vendor == "huawei":
+    if vendor in ("huawei", "huawei-snmp"):
+        return HuaweiSnmp(cfg["snmp"])
+    if vendor == "huawei-redfish":
         return HuaweiRedfish(cfg["redfish"])
     raise IpmiError(f"unknown vendor '{vendor}'")
 
