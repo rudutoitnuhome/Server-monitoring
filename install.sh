@@ -26,6 +26,7 @@ command -v nvidia-smi >/dev/null 2>&1 || echo "   ! 'nvidia-smi' not found — G
 echo "==> Installing application to ${APP_DIR}"
 mkdir -p "${APP_DIR}"
 cp "${SRC_DIR}/server_monitor.py" "${APP_DIR}/"
+cp "${SRC_DIR}/fan_controller.py" "${APP_DIR}/"   # used by the optional fan-controller service
 
 echo "==> Ensuring Python venv support"
 if ! command -v python3 >/dev/null 2>&1; then

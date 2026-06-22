@@ -1,0 +1,16 @@
+[Unit]
+Description=IPMI fan controller (MQTT temps -> chassis fans)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py /etc/fan-controller/config.yaml
+Restart=on-failure
+RestartSec=10
+# On stop/restart the controller restores the BMC's automatic fan control.
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,61 @@
+# fan_controller.py configuration — copy to /etc/fan-controller/config.yaml
+# and edit. Runs on the Proxmox host whose fans you want to control.
+
+mqtt:
+  host: 192.168.4.42
+  port: 1883
+  username: rudi
+  password: changeme
+
+# HA device name for this chassis.
+node_name: r720
+
+base_topic: server-monitor   # where server_monitor.py publishes temps (don't change unless you did there)
+fan_topic: server-fan        # this controller's own MQTT topics
+interval: 30                 # control loop seconds
+
+ipmi:
+  vendor: dell               # dell | huawei
+  host: 192.168.4.6          # iDRAC IP. Set to null to use the LOCAL bmc (-I open)
+  username: ipmi
+  password: changeme
+  interface: lanplus
+
+# Temperature inputs. `node` is a server_monitor node; keys/key_regex are its
+# state-JSON keys (the [bracketed] names in `server_monitor.py --once`).
+#
+# Example R720: its own CPU temps come from the Proxmox host's monitor agent
+# (node "r720host"), and the GPU temp comes from the VM running on it
+# (node "long_john_silver").
+sources:
+  cpu_gpu:
+    - node: r720host
+      key_regex: '^cpu\d*_temp$'        # cpu_temp / cpu0_temp / cpu1_temp
+    - node: long_john_silver            # GPU VM living on this host
+      key_regex: '^gpu\d+_temp$'
+  hdd:
+    - node: r720host
+      key_regex: '^disk_.*_temp$'
+
+# Fan curves: a band applies when temp < `below` (first match wins).
+curves:
+  cpu_gpu:
+    - {below: 45, percent: 10}
+    - {below: 55, percent: 20}
+    - {below: 65, percent: 45}
+    - {below: 70, percent: 70}
+    - {below: 999, percent: 100}
+  hdd:
+    - {below: 45, percent: 20}
+    - {below: 55, percent: 30}
+    - {below: 65, percent: 45}
+    - {below: 70, percent: 70}
+    - {below: 999, percent: 100}
+
+ambient:
+  enabled: true              # publish ipmitool sdr temperatures (inlet/exhaust/...) to HA
+
+safety:
+  stale_seconds: 180         # temps older than this are ignored
+  min_percent: 20            # never command below this in curve mode
+  ipmi_failures_before_auto: 3   # restore BMC auto control after this many IPMI errors

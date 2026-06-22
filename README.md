@@ -134,6 +134,56 @@ Check logs from the app's shell or:
 docker logs -f server-monitor
 ```
 
+## Fan control (Dell iDRAC, IPMI)
+
+`fan_controller.py` is an optional companion that drives a server's chassis fans
+from the temperatures published over MQTT. It runs on the Proxmox host whose
+fans you want to control and:
+
+- subscribes to the `server-monitor` temps that matter to that chassis —
+  including **GPU temps published by a VM running on the host** (you name the
+  VM's monitor node in the config, so e.g. a GPU VM's temp drives the host fans);
+- applies two configurable curves — **CPU/GPU** and **HDD** (max wins);
+- sets the fans via Dell iDRAC raw IPMI commands (takes manual control and
+  disables the third-party-PCIe 100% response, like the old startup script);
+- publishes the BMC's **ambient/inlet/exhaust** temps + the computed target %
+  to Home Assistant, and exposes a **Fan override %** number;
+- **fails safe**: restores the BMC's automatic fan control on exit, on stale
+  temperature data, or after repeated IPMI errors.
+
+Default curves (from the config):
+
+| Temp | CPU/GPU | HDD |
+|------|--------:|----:|
+| < 45 °C | 10% | 20% |
+| 45–55 | 20% | 30% |
+| 55–65 | 45% | 45% |
+| 65–70 | 70% | 70% |
+| > 70 | 100% | 100% |
+
+Setup on the host:
+
+```bash
+sudo ./install.sh                 # also copies fan_controller.py into /opt
+sudo mkdir -p /etc/fan-controller
+sudo cp config.fan.example.yaml /etc/fan-controller/config.yaml
+sudo nano /etc/fan-controller/config.yaml   # MQTT, iDRAC creds, sources, curves
+# Test WITHOUT touching the fans first:
+sudo /opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py --once
+sudo /opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py --dry-run
+# Then enable the service:
+sudo cp systemd/fan-controller.service /etc/systemd/system/
+sudo systemctl enable --now fan-controller
+journalctl -u fan-controller -f
+```
+
+> `--dry-run` computes and publishes everything but never sends a fan command —
+> use it to confirm the curve picks sane values before handing over real control.
+> Needs `ipmitool` on the host (`apt install ipmitool`).
+
+> **Huawei** uses a different OEM command set (iBMC); the temperature readout
+> works, but its manual fan-control commands are stubbed pending the next phase.
+
 ## Configuration
 
 > **⚠️ The systemd service only reads `/etc/server-monitor/config.yaml`.**
