@@ -293,11 +293,16 @@ class FanController:
         self._manual_active = False
         self._last_percent: int | None = None
 
-        # Resolve the set of topics we must subscribe to.
+        # Resolve the set of topics we must subscribe to. Sources without a
+        # node (e.g. a removed GPU source on a host with no GPU) are skipped.
         self._topics: set[str] = set()
         for group in ("cpu_gpu", "hdd"):
             for src in cfg["sources"].get(group, []):
-                self._topics.add(self._topic_for(src["node"]))
+                node = src.get("node")
+                if not node:
+                    log.warning("Ignoring %s source with no 'node': %s", group, src)
+                    continue
+                self._topics.add(self._topic_for(node))
 
         client_id = cfg["mqtt"].get("client_id") or f"fan-controller-{self.node_slug}"
         self.client = mqtt.Client(client_id=client_id)
@@ -404,7 +409,10 @@ class FanController:
         for group in ("cpu_gpu", "hdd"):
             temps: list[float] = []
             for src in self.cfg["sources"].get(group, []):
-                vals = self.cache.values(self._topic_for(src["node"]),
+                node = src.get("node")
+                if not node:
+                    continue
+                vals = self.cache.values(self._topic_for(node),
                                          src.get("keys"), src.get("key_regex"),
                                          self.stale)
                 temps += vals

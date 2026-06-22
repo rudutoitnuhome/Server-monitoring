@@ -36,6 +36,8 @@ sources:
   hdd:
     - node: r720host
       key_regex: '^disk_.*_temp$'
+  # No GPU on this host? Just delete the GPU source line above (don't leave the
+  # node blank). The cpu_gpu curve will run on the CPU temps alone.
 
 # Fan curves: a band applies when temp < `below` (first match wins).
 curves:
