@@ -255,6 +255,8 @@ views:
           name: Inlet
         - entity: sensor.moxxy_proxxy_fans_exhaust_temp
           name: Exhaust
+        - entity: sensor.moxxy_proxxy_fans_temp_0eh
+          name: CPU (iDRAC 0Eh)
     - type: vertical-stack
       cards:
       - type: markdown
@@ -502,3 +504,5 @@ views:
           name: Inlet
         - entity: sensor.gpuy_proxxy_fans_exhaust_temp
           name: Exhaust
+        - entity: sensor.gpuy_proxxy_fans_temp_0eh
+          name: CPU (iDRAC 0Eh)
