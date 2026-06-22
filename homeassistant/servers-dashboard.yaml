@@ -1,6 +1,7 @@
 # Servers dashboard — full-width panel view (4 host columns).
 # panel: true makes the single horizontal-stack span the full browser width.
-# Built-in cards only; entity IDs match the live entities.
+# The Huawei fan-controller entities (in the TrueNasty column) assume the
+# controller's node_name is 'huawei' -> sensor.huawei_fans_* / number.huawei_fans_*.
 
 title: Servers
 views:
@@ -350,6 +351,28 @@ views:
         entities:
         - sensor.truenasty_enp6s18_in
         - sensor.truenasty_enp6s18_out
+      - type: markdown
+        content: '### Huawei Fans'
+      - type: gauge
+        name: Fan Target
+        entity: sensor.huawei_fans_fan_target
+        unit: '%'
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 0
+          yellow: 60
+          red: 85
+      - type: entities
+        title: Fan control
+        entities:
+        - entity: number.huawei_fans_fan_override
+          name: Override % (0 = auto)
+        - entity: sensor.huawei_fans_cpu_gpu_temp
+          name: CPU temp (curve)
+        - entity: sensor.huawei_fans_hdd_temp
+          name: HDD temp (curve)
     - type: vertical-stack
       cards:
       - type: markdown
