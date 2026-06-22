@@ -181,8 +181,23 @@ journalctl -u fan-controller -f
 > use it to confirm the curve picks sane values before handing over real control.
 > Needs `ipmitool` on the host (`apt install ipmitool`).
 
-> **Huawei** uses a different OEM command set (iBMC); the temperature readout
-> works, but its manual fan-control commands are stubbed pending the next phase.
+### Huawei iBMC (Redfish)
+
+Huawei controls fans over the **Redfish API** (HTTPS on the BMC), not raw IPMI.
+Set `ipmi.vendor: huawei` and fill in the `redfish:` block (host, credentials).
+Because the fan-control payload shape varies by iBMC firmware, the manual / set-
+speed / auto actions are **config-driven** — confirm them against your box:
+
+```bash
+# read-only: dumps the iBMC Chassis + Thermal schema
+sudo /opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py --probe
+```
+
+Check the dumped `Thermal` resource for the Huawei `Oem` fan fields (e.g.
+`FanSpeedAdjustmentMode`, the per-percent field name) and adjust
+`redfish.manual_mode` / `set_speed` / `auto_mode` to match. If a Huawei command
+is wrong it errors and the BMC keeps managing the fans (safe). The `requests`
+package is required for this backend (installed by `install.sh`).
 
 ## Configuration
 

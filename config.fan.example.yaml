@@ -21,6 +21,31 @@ ipmi:
   password: changeme
   interface: lanplus
 
+# Only used when ipmi.vendor: huawei. Huawei iBMC controls fans over Redfish
+# (HTTPS on the BMC), not raw IPMI. Run `fan_controller.py --probe` to dump your
+# iBMC's Thermal schema, then confirm the manual_mode/set_speed/auto_mode actions
+# below match it (the FanSpeedLevelPercents field name/shape varies by firmware).
+# A payload value of exactly "{percent}" is replaced with the integer fan %.
+# redfish:
+#   host: 192.168.4.7
+#   username: Administrator
+#   password: changeme
+#   verify_tls: false
+#   chassis_id: "1"
+#   thermal_path: /redfish/v1/Chassis/{chassis}/Thermal
+#   manual_mode:
+#     method: PATCH
+#     path: /redfish/v1/Chassis/{chassis}/Thermal
+#     payload: {Oem: {Huawei: {FanSpeedAdjustmentMode: Manual}}}
+#   set_speed:
+#     method: PATCH
+#     path: /redfish/v1/Chassis/{chassis}/Thermal
+#     payload: {Oem: {Huawei: {FanSpeedAdjustmentMode: Manual, FanSpeedLevelPercents: "{percent}"}}}
+#   auto_mode:
+#     method: PATCH
+#     path: /redfish/v1/Chassis/{chassis}/Thermal
+#     payload: {Oem: {Huawei: {FanSpeedAdjustmentMode: Automatic}}}
+
 # Temperature inputs. `node` is a server_monitor node; keys/key_regex are its
 # state-JSON keys (the [bracketed] names in `server_monitor.py --once`).
 #

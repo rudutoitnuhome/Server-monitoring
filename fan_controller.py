@@ -62,6 +62,34 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "password": None,
         "interface": "lanplus",
     },
+    # Huawei iBMC uses Redfish (HTTPS on the BMC) for fan control, not raw IPMI.
+    # The actions below are config-driven so they can match your firmware — run
+    # `fan_controller.py --probe` and confirm the schema. {chassis} is filled
+    # from chassis_id; a value of exactly "{percent}" becomes the integer %.
+    "redfish": {
+        "host": None,
+        "username": None,
+        "password": None,
+        "verify_tls": False,      # BMCs ship self-signed certs
+        "chassis_id": "1",
+        "thermal_path": "/redfish/v1/Chassis/{chassis}/Thermal",
+        "manual_mode": {
+            "method": "PATCH",
+            "path": "/redfish/v1/Chassis/{chassis}/Thermal",
+            "payload": {"Oem": {"Huawei": {"FanSpeedAdjustmentMode": "Manual"}}},
+        },
+        "set_speed": {
+            "method": "PATCH",
+            "path": "/redfish/v1/Chassis/{chassis}/Thermal",
+            "payload": {"Oem": {"Huawei": {"FanSpeedAdjustmentMode": "Manual",
+                                           "FanSpeedLevelPercents": "{percent}"}}},
+        },
+        "auto_mode": {
+            "method": "PATCH",
+            "path": "/redfish/v1/Chassis/{chassis}/Thermal",
+            "payload": {"Oem": {"Huawei": {"FanSpeedAdjustmentMode": "Automatic"}}},
+        },
+    },
     # Temperature inputs. Each source names a server-monitor node and either an
     # explicit list of state-JSON keys or a regex over keys. (Keys are the values
     # in the [brackets] of `server_monitor.py --once`, e.g. cpu0_temp, gpu0_temp,
@@ -196,29 +224,100 @@ class DellIpmi:
             results.append((name, float(m.group(1))))
         return results
 
+    def probe(self) -> str:
+        return self._run(["sdr", "type", "temperature"]) + "\n" + \
+               self._run(["sdr", "type", "fan"])
 
-class HuaweiIpmi(DellIpmi):
-    """Huawei iBMC — fan-control OEM commands differ from Dell and are filled in
-    in a later phase. Temperature readout via `sdr` is standard IPMI and works."""
 
+def _subst(obj, percent: int):
+    """Replace {percent} placeholders in a payload; exact "{percent}" -> int."""
+    if isinstance(obj, str):
+        if obj == "{percent}":
+            return percent
+        return obj.replace("{percent}", str(percent))
+    if isinstance(obj, dict):
+        return {k: _subst(v, percent) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_subst(v, percent) for v in obj]
+    return obj
+
+
+class HuaweiRedfish:
+    """Huawei iBMC fan control via the Redfish API (config-driven actions)."""
+
+    def __init__(self, cfg: dict):
+        try:
+            import requests  # noqa: F401
+        except ImportError:
+            raise IpmiError("Huawei (Redfish) needs the 'requests' package")
+        import requests
+        import urllib3
+        urllib3.disable_warnings()  # BMCs use self-signed certs
+
+        self.cfg = cfg
+        host = cfg.get("host")
+        if not host:
+            raise IpmiError("redfish.host is required for the huawei vendor")
+        self.base = host if host.startswith("http") else f"https://{host}"
+        self.chassis = str(cfg.get("chassis_id", "1"))
+        self.session = requests.Session()
+        self.session.verify = bool(cfg.get("verify_tls", False))
+        self.session.auth = (cfg.get("username") or "", cfg.get("password") or "")
+        self.session.headers.update({"Content-Type": "application/json"})
+
+    def _path(self, p: str) -> str:
+        return self.base + p.replace("{chassis}", self.chassis)
+
+    def _get(self, path: str) -> dict:
+        r = self.session.get(self._path(path), timeout=20)
+        r.raise_for_status()
+        return r.json()
+
+    def _action(self, action: dict, percent: int | None = None):
+        method = (action.get("method") or "PATCH").upper()
+        path = self._path(action["path"])
+        payload = action.get("payload")
+        if percent is not None:
+            payload = _subst(payload, percent)
+        r = self.session.request(method, path, json=payload, timeout=20)
+        if r.status_code >= 400:
+            raise IpmiError(f"redfish {method} {path} -> {r.status_code}: {r.text[:300]}")
+
+    # ---- interface parity with DellIpmi ----
     def begin_manual(self):
-        raise IpmiError("Huawei iBMC manual fan control not implemented yet")
+        self._action(self.cfg["manual_mode"])
 
     def set_percent(self, percent: int):
-        raise IpmiError("Huawei iBMC manual fan control not implemented yet")
+        percent = max(0, min(100, int(percent)))
+        self._action(self.cfg["set_speed"], percent=percent)
 
     def restore_auto(self):
-        # Best-effort; standard cold path is to let the BMC manage fans.
-        log.warning("Huawei restore_auto is a no-op (BMC already in control)")
+        self._action(self.cfg["auto_mode"])
+
+    def read_temperatures(self) -> list[tuple[str, float]]:
+        data = self._get(self.cfg["thermal_path"])
+        results: list[tuple[str, float]] = []
+        for t in data.get("Temperatures", []):
+            name, val = t.get("Name"), t.get("ReadingCelsius")
+            if name and isinstance(val, (int, float)):
+                results.append((str(name), float(val)))
+        return results
+
+    def probe(self) -> str:
+        chassis = self._get(f"/redfish/v1/Chassis/{self.chassis}")
+        thermal = self._get(self.cfg["thermal_path"])
+        return ("=== Chassis ===\n" + json.dumps(chassis, indent=2) +
+                "\n\n=== Thermal ===\n" + json.dumps(thermal, indent=2))
 
 
-def make_ipmi(cfg: dict) -> DellIpmi:
-    vendor = (cfg.get("vendor") or "dell").lower()
+def make_ipmi(cfg: dict):
+    """Build the BMC backend from the full config (vendor under ipmi.vendor)."""
+    vendor = (cfg.get("ipmi", {}).get("vendor") or "dell").lower()
     if vendor == "dell":
-        return DellIpmi(cfg)
+        return DellIpmi(cfg["ipmi"])
     if vendor == "huawei":
-        return HuaweiIpmi(cfg)
-    raise IpmiError(f"unknown ipmi vendor '{vendor}'")
+        return HuaweiRedfish(cfg["redfish"])
+    raise IpmiError(f"unknown vendor '{vendor}'")
 
 
 # --------------------------------------------------------------------------- #
@@ -285,7 +384,7 @@ class FanController:
         self.min_percent = int(cfg["safety"]["min_percent"])
         self.fail_threshold = int(cfg["safety"]["ipmi_failures_before_auto"])
 
-        self.ipmi = make_ipmi(cfg["ipmi"])
+        self.ipmi = make_ipmi(cfg)
         self.cache = TempCache()
         self.override: int = 0           # 0 = auto/curve; 1-100 = forced
         self._announced: set[str] = set()
@@ -534,6 +633,9 @@ def parse_args(argv=None):
                    help="Compute and publish, but never send fan-control IPMI commands")
     p.add_argument("--once", action="store_true",
                    help="Wait briefly for temps, print one decision, and exit")
+    p.add_argument("--probe", action="store_true",
+                   help="Dump the BMC's temperature/fan schema and exit "
+                   "(read-only; use it to confirm the Huawei Redfish payloads)")
     return p.parse_args(argv)
 
 
@@ -542,6 +644,15 @@ def main():
                         format="%(asctime)s %(levelname)s %(message)s")
     args = parse_args()
     cfg = load_config(args.config)
+
+    if args.probe:
+        try:
+            print(make_ipmi(cfg).probe())
+        except Exception as exc:
+            log.error("Probe failed: %s", exc)
+            sys.exit(1)
+        return
+
     controller = FanController(cfg, dry_run=args.dry_run or args.once)
 
     signal.signal(signal.SIGINT, _handle_signal)
