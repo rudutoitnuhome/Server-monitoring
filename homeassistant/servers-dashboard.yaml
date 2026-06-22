@@ -1,7 +1,7 @@
 # Servers dashboard — full-width panel view (4 host columns).
 # panel: true makes the single horizontal-stack span the full browser width.
-# The Huawei fan-controller entities (in the TrueNasty column) assume the
-# controller's node_name is 'huawei' -> sensor.huawei_fans_* / number.huawei_fans_*.
+# Fan-controller cards: moxxy_proxxy_fans_* (Moxxy column) and
+# gpuy_proxxy_fans_* (Long-John-Silver column, the R720 GPU host).
 
 title: Servers
 views:
@@ -229,6 +229,32 @@ views:
         - sensor.moxxy_proxxy_nic0_out
         - sensor.moxxy_proxxy_nic1_in
         - sensor.moxxy_proxxy_nic1_out
+      - type: markdown
+        content: '### Fan control'
+      - type: gauge
+        name: Fan Target
+        entity: sensor.moxxy_proxxy_fans_fan_target
+        unit: '%'
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 0
+          yellow: 60
+          red: 85
+      - type: entities
+        title: Fan control
+        entities:
+        - entity: number.moxxy_proxxy_fans_fan_override
+          name: Override % (0 = auto)
+        - entity: sensor.moxxy_proxxy_fans_cpu_gpu_temp
+          name: CPU/GPU temp (curve)
+        - entity: sensor.moxxy_proxxy_fans_hdd_temp
+          name: HDD temp (curve)
+        - entity: sensor.moxxy_proxxy_fans_inlet_temp
+          name: Inlet
+        - entity: sensor.moxxy_proxxy_fans_exhaust_temp
+          name: Exhaust
     - type: vertical-stack
       cards:
       - type: markdown
@@ -351,28 +377,6 @@ views:
         entities:
         - sensor.truenasty_enp6s18_in
         - sensor.truenasty_enp6s18_out
-      - type: markdown
-        content: '### Huawei Fans'
-      - type: gauge
-        name: Fan Target
-        entity: sensor.huawei_fans_fan_target
-        unit: '%'
-        min: 0
-        max: 100
-        needle: true
-        severity:
-          green: 0
-          yellow: 60
-          red: 85
-      - type: entities
-        title: Fan control
-        entities:
-        - entity: number.huawei_fans_fan_override
-          name: Override % (0 = auto)
-        - entity: sensor.huawei_fans_cpu_gpu_temp
-          name: CPU temp (curve)
-        - entity: sensor.huawei_fans_hdd_temp
-          name: HDD temp (curve)
     - type: vertical-stack
       cards:
       - type: markdown
@@ -472,3 +476,29 @@ views:
         entities:
         - sensor.long_john_silver_ens3_in
         - sensor.long_john_silver_ens3_out
+      - type: markdown
+        content: '### Host fans (R720)'
+      - type: gauge
+        name: Fan Target
+        entity: sensor.gpuy_proxxy_fans_fan_target
+        unit: '%'
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 0
+          yellow: 60
+          red: 85
+      - type: entities
+        title: Fan control
+        entities:
+        - entity: number.gpuy_proxxy_fans_fan_override
+          name: Override % (0 = auto)
+        - entity: sensor.gpuy_proxxy_fans_cpu_gpu_temp
+          name: CPU/GPU temp (curve)
+        - entity: sensor.gpuy_proxxy_fans_hdd_temp
+          name: HDD temp (curve)
+        - entity: sensor.gpuy_proxxy_fans_inlet_temp
+          name: Inlet
+        - entity: sensor.gpuy_proxxy_fans_exhaust_temp
+          name: Exhaust
