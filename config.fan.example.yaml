@@ -50,6 +50,25 @@ ipmi:
 #   password: changeme
 #   verify_tls: false
 #   chassis_id: "1"
+#
+# --- HPE iLO4 Gen8/Gen9 (vendor: hpe), via SSH ------------------------------
+# Requires the iLO firmware patched with ilo4_unlock (<= v2.77) so the `fan` CLI
+# is available, and the `paramiko` package (installed by install.sh). iLO5+ is
+# NOT supported. Run --probe (which runs `fan info`) to list the PWM ids, then
+# put them in `fans`. Speed is forced with `fan p <id> lock <pwm>` (0-255).
+# hpe:
+#   host: 192.168.4.8          # iLO IP
+#   username: Administrator
+#   password: changeme
+#   ssh_port: 22
+#   fans: [0, 1, 2, 3, 4, 5]   # PWM ids from `fan info` (--probe)
+#   pwm_max: 255               # 100% maps to this
+#   # Optional ambient temps via ipmitool (iLO4 supports standard IPMI):
+#   ipmi:
+#     host: 192.168.4.8
+#     username: Administrator
+#     password: changeme
+#     interface: lanplus
 
 # Temperature inputs. `node` is a server_monitor node; keys/key_regex are its
 # state-JSON keys (the [bracketed] names in `server_monitor.py --once`).

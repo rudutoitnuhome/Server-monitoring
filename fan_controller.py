@@ -109,6 +109,20 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "walk_base": ".1.3.6.1.4.1.2011.2.235.1.1.8",   # for --probe
         "ipmi": None,             # optional {host, username, password} -> ambient temps
     },
+    # HPE iLO4 (Gen8/Gen9) fan control over SSH (vendor: hpe). Requires the iLO
+    # firmware to be patched with ilo4_unlock (<= v2.77) so the `fan` CLI command
+    # is available. Fans are forced with `fan p <N> lock <pwm>` (pwm 0-255) and
+    # released with `fan p <N> unlock`. List the PWM ids from `--probe` (fan info).
+    # Needs the `paramiko` package. iLO5+ is not supported (no control).
+    "hpe": {
+        "host": None,             # iLO IP
+        "username": None,
+        "password": None,
+        "ssh_port": 22,
+        "fans": [],               # PWM ids to control, e.g. [0,1,2,3,4,5]
+        "pwm_max": 255,           # 100% = this value
+        "ipmi": None,             # optional {host, username, password} -> ambient temps
+    },
     # Temperature inputs. Each source names a server-monitor node and either an
     # explicit list of state-JSON keys or a regex over keys. (Keys are the values
     # in the [brackets] of `server_monitor.py --once`, e.g. cpu0_temp, gpu0_temp,
@@ -381,6 +395,74 @@ class HuaweiSnmp:
         return out
 
 
+class HpeIlo:
+    """HPE iLO4 (Gen8/Gen9) fan control over SSH.
+
+    Requires iLO firmware patched with ilo4_unlock so the `fan` CLI command is
+    available. Forces each fan PWM with `fan p <id> lock <pwm>` (0-255) and
+    releases with `fan p <id> unlock`. Optionally reads ambient temps via
+    ipmitool. iLO4 needs legacy SSH algorithms, which paramiko negotiates.
+    """
+
+    def __init__(self, cfg: dict):
+        try:
+            import paramiko  # noqa: F401
+        except ImportError:
+            raise IpmiError("HPE iLO needs the 'paramiko' package")
+        self.cfg = cfg
+        if not cfg.get("host"):
+            raise IpmiError("hpe.host (iLO IP) is required for the hpe vendor")
+        self.fans = list(cfg.get("fans") or [])
+        self.pwm_max = int(cfg.get("pwm_max", 255))
+        self._ipmi = DellIpmi(cfg["ipmi"]) if cfg.get("ipmi") else None  # ambient only
+
+    def _ssh_run(self, commands: list[str]) -> str:
+        import paramiko
+        cli = paramiko.SSHClient()
+        cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        cli.connect(
+            self.cfg["host"], port=int(self.cfg.get("ssh_port", 22)),
+            username=self.cfg.get("username"), password=self.cfg.get("password"),
+            look_for_keys=False, allow_agent=False, timeout=15,
+            disabled_algorithms={},   # keep legacy KEX/host-key algos for iLO4
+        )
+        out: list[str] = []
+        try:
+            for cmd in commands:
+                _in, stdout, stderr = cli.exec_command(cmd, timeout=15)
+                out.append(stdout.read().decode("utf-8", "ignore") +
+                           stderr.read().decode("utf-8", "ignore"))
+        finally:
+            cli.close()
+        return "\n".join(out)
+
+    def begin_manual(self):
+        pass  # locking a fan is itself the manual override on iLO4
+
+    def set_percent(self, percent: int):
+        if not self.fans:
+            raise IpmiError("hpe.fans is empty — list the PWM ids from `--probe` (fan info)")
+        percent = max(0, min(100, int(percent)))
+        pwm = round(percent * self.pwm_max / 100)
+        self._ssh_run([f"fan p {fid} lock {pwm}" for fid in self.fans])
+
+    def restore_auto(self):
+        if self.fans:
+            self._ssh_run([f"fan p {fid} unlock" for fid in self.fans])
+
+    def read_temperatures(self) -> list[tuple[str, float]]:
+        return self._ipmi.read_temperatures() if self._ipmi else []
+
+    def probe(self) -> str:
+        out = self._ssh_run(["fan info"])
+        if self._ipmi:
+            try:
+                out += "\n=== ipmitool temperatures ===\n" + self._ipmi.probe()
+            except (IpmiError, subprocess.SubprocessError) as exc:
+                out += f"\n(ipmitool temps unavailable: {exc})"
+        return out
+
+
 def make_ipmi(cfg: dict):
     """Build the BMC backend from the full config (vendor under ipmi.vendor)."""
     vendor = (cfg.get("ipmi", {}).get("vendor") or "dell").lower()
@@ -390,6 +472,8 @@ def make_ipmi(cfg: dict):
         return HuaweiSnmp(cfg["snmp"])
     if vendor == "huawei-redfish":
         return HuaweiRedfish(cfg["redfish"])
+    if vendor in ("hpe", "ilo", "hpe-ilo4"):
+        return HpeIlo(cfg["hpe"])
     raise IpmiError(f"unknown vendor '{vendor}'")
 
 

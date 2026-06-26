@@ -206,6 +206,28 @@ A wrong SNMP set just errors and the BMC keeps managing the fans (safe).
 > before enabling the service**. Newer iBMC servers can alternatively use
 > `vendor: huawei-redfish` with a `redfish:` block.
 
+### HPE iLO4 (Gen8 / Gen9)
+
+HPE locks fan control; on **iLO4** it's reachable only after **patching the iLO
+firmware** with [ilo4_unlock](https://github.com/kendallgoto/ilo4_unlock)
+(works up to iLO4 **v2.77**). After patching, the `fan` CLI command is exposed
+over SSH. Set `ipmi.vendor: hpe` and fill in the `hpe:` block. Needs `paramiko`
+(installed by `install.sh`). **iLO5/Gen10+ is not supported** (no control).
+
+1. Patch the iLO with `ilo4_unlock`, then SSH in and run `fan info` to find the
+   PWM ids — or use the controller's probe:
+   ```bash
+   sudo /opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py --probe
+   ```
+2. Put those ids in `hpe.fans`. The controller forces each with
+   `fan p <id> lock <pwm>` (pwm = `percent * pwm_max / 100`) and releases them
+   with `fan p <id> unlock` (the fail-safe / auto restore).
+
+> **Safety note:** unlike Dell/Huawei, an HPE "auto restore" means *unlocking*
+> the fans. If the controller can't reach the iLO to unlock while fans are
+> locked low, the server's own thermal protection is the backstop — so keep a
+> sensible `safety.min_percent` and verify `--dry-run` first.
+
 ## Configuration
 
 > **⚠️ The systemd service only reads `/etc/server-monitor/config.yaml`.**
