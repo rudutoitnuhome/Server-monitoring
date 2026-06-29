@@ -1,0 +1,122 @@
+# Standalone dashboard for the testhp host (HPE iLO4 server).
+# Built-in cards only; entity IDs match the live testhp_* entities.
+
+title: TestHP
+views:
+  - title: TestHP
+    path: testhp
+    icon: mdi:server
+    cards:
+      - type: markdown
+        content: '## TestHP (HPE)'
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            name: CPU
+            entity: sensor.testhp_cpu_temperature
+            unit: °C
+            min: 20
+            max: 90
+            needle: true
+            severity: {green: 0, yellow: 65, red: 80}
+          - type: gauge
+            name: Disk
+            entity: sensor.testhp_disk_sdb_vr000480gwepr
+            unit: °C
+            min: 20
+            max: 90
+            needle: true
+            severity: {green: 0, yellow: 55, red: 70}
+          - type: gauge
+            name: Fan Target
+            entity: sensor.testhp_fans_fan_target
+            unit: '%'
+            min: 0
+            max: 100
+            needle: true
+            severity: {green: 0, yellow: 60, red: 85}
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            name: CPU %
+            entity: sensor.testhp_cpu_usage
+            unit: '%'
+            min: 0
+            max: 100
+            needle: true
+            severity: {green: 0, yellow: 70, red: 90}
+          - type: gauge
+            name: RAM
+            entity: sensor.testhp_memory_used
+            unit: '%'
+            min: 0
+            max: 100
+            needle: true
+            severity: {green: 0, yellow: 75, red: 90}
+          - type: gauge
+            name: IO Wait
+            entity: sensor.testhp_io_wait
+            unit: '%'
+            min: 0
+            max: 100
+            needle: true
+            severity: {green: 0, yellow: 15, red: 40}
+
+      - type: entities
+        title: Fan control
+        entities:
+          - entity: number.testhp_fans_fan_override
+            name: Override % (0 = auto)
+          - entity: sensor.testhp_fans_fan_target
+            name: Fan target
+          - entity: sensor.testhp_fans_cpu_gpu_temp
+            name: CPU temp (curve)
+          - entity: sensor.testhp_fans_hdd_temp
+            name: HDD temp (curve)
+
+      - type: entities
+        title: System
+        entities:
+          - entity: sensor.testhp_uptime
+            name: Uptime
+          - entity: sensor.testhp_cpu_load_1m
+            name: Load 1m
+          - entity: sensor.testhp_cpu_load_5m
+            name: Load 5m
+          - entity: sensor.testhp_cpu_load_15m
+            name: Load 15m
+          - entity: sensor.testhp_memory_used_gb
+            name: RAM used
+          - entity: sensor.testhp_memory_total_gb
+            name: RAM total
+          - entity: sensor.testhp_disk_used
+            name: Storage used
+          - entity: sensor.testhp_disk_free
+            name: Storage free
+          - entity: sensor.testhp_eno1_link_speed
+            name: eno1 link speed
+
+      - type: history-graph
+        title: Temperatures – 24h
+        hours_to_show: 24
+        min_y_axis: 15
+        max_y_axis: 90
+        entities:
+          - sensor.testhp_cpu_temperature
+          - sensor.testhp_disk_sdb_vr000480gwepr
+          - sensor.testhp_fans_fan_target
+
+      - type: history-graph
+        title: Network (Mbit/s) – 24h
+        hours_to_show: 24
+        entities:
+          - sensor.testhp_eno1_in
+          - sensor.testhp_eno1_out
+          - sensor.testhp_eno2_in
+          - sensor.testhp_eno2_out
+          - sensor.testhp_eno3_in
+          - sensor.testhp_eno3_out
+          - sensor.testhp_eno4_in
+          - sensor.testhp_eno4_out
