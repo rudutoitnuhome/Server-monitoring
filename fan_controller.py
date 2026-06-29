@@ -639,7 +639,8 @@ class FanController:
                 "manufacturer": "fan_controller.py"}
 
     def _announce_sensor(self, key: str, name: str, unit: str | None,
-                         device_class: str | None, icon: str | None):
+                         device_class: str | None, icon: str | None,
+                         state_class: str | None = "measurement"):
         if key in self._announced:
             return
         object_id = f"{self.node_slug}_fan_{key}"
@@ -650,8 +651,9 @@ class FanController:
             "state_topic": f"{self.fan_topic}/state",
             "availability_topic": self.avail_topic,
             "value_template": f"{{{{ value_json.{key} }}}}",
-            "state_class": "measurement", "device": self.device_block,
+            "device": self.device_block,
         }
+        if state_class: payload["state_class"] = state_class
         if unit: payload["unit_of_measurement"] = unit
         if device_class: payload["device_class"] = device_class
         if icon: payload["icon"] = icon
@@ -702,17 +704,25 @@ class FanController:
                 result[f"{group}_temp"] = round(gmax, 1)
                 result[f"{group}_percent"] = pct
         result["any_fresh"] = any_fresh
+        labels = {"cpu_gpu": "CPU/GPU", "hdd": "HDD"}
         if self.override > 0:
             target = self.override
             result["mode"] = "override"
+            result["active_curve"] = "Override"
         elif group_pct:
-            target = max(group_pct.values())
             result["mode"] = "curve"
+            raw = max(group_pct.values())
+            target = max(raw, self.min_percent)
+            if target > raw:
+                result["active_curve"] = "Floor (min %)"
+            else:
+                winners = [labels[g] for g in ("cpu_gpu", "hdd")
+                           if group_pct.get(g) == raw]
+                result["active_curve"] = " + ".join(winners)
         else:
             target = None
             result["mode"] = "stale"
-        if target is not None and self.override == 0:
-            target = max(target, self.min_percent)
+            result["active_curve"] = "Stale (no data)"
         result["target_percent"] = target
         return result
 
@@ -748,6 +758,9 @@ class FanController:
     def publish_state(self, decision: dict):
         state = {k: v for k, v in decision.items()
                  if isinstance(v, (int, float)) and k != "any_fresh"}
+        # active curve is a text value, carried alongside the numeric ones
+        if "active_curve" in decision:
+            state["active_curve"] = decision["active_curve"]
         # ambient temps
         if self.cfg["ambient"]["enabled"] and not self.dry_run:
             try:
@@ -759,6 +772,8 @@ class FanController:
                 log.debug("ambient read failed: %s", exc)
         # discovery for the computed values
         self._announce_sensor("target_percent", "Fan Target", "%", None, "mdi:fan")
+        self._announce_sensor("active_curve", "Active Curve", None, None,
+                              "mdi:chart-bell-curve", state_class=None)
         if "cpu_gpu_temp" in state:
             self._announce_sensor("cpu_gpu_temp", "CPU/GPU Temp", "°C", "temperature", None)
         if "hdd_temp" in state:
