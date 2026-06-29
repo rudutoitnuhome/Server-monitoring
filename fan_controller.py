@@ -215,8 +215,11 @@ class DellIpmi:
         return cmd
 
     def _run(self, args: list[str], timeout: int = 20) -> str:
-        proc = subprocess.run(self._base() + args, capture_output=True,
-                              text=True, timeout=timeout)
+        try:
+            proc = subprocess.run(self._base() + args, capture_output=True,
+                                  text=True, timeout=timeout)
+        except FileNotFoundError:
+            raise IpmiError("ipmitool not found (apt install ipmitool)")
         if proc.returncode != 0:
             raise IpmiError(f"ipmitool {' '.join(args)} failed: {proc.stderr.strip()}")
         return proc.stdout
