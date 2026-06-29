@@ -222,8 +222,15 @@ A wrong SNMP set just errors and the BMC keeps managing the fans (safe).
 HPE locks fan control; on **iLO4** it's reachable only after **patching the iLO
 firmware** with [ilo4_unlock](https://github.com/kendallgoto/ilo4_unlock)
 (works up to iLO4 **v2.77**). After patching, the `fan` CLI command is exposed
-over SSH. Set `ipmi.vendor: hpe` and fill in the `hpe:` block. Needs `paramiko`
-(installed by `install.sh`). **iLO5/Gen10+ is not supported** (no control).
+over SSH. Set `ipmi.vendor: hpe` and fill in the `hpe:` block. iLO4's SSH is too
+old for modern libraries, so this backend uses the **system ssh client with
+legacy algorithms re-enabled**, plus **sshpass** for password auth:
+
+```bash
+apt install sshpass openssh-client
+```
+
+**iLO5/Gen10+ is not supported** (no control).
 
 1. Patch the iLO with `ilo4_unlock`, then SSH in and run `fan info` to find the
    PWM ids — or use the controller's probe:

@@ -1,4 +1,5 @@
 paho-mqtt>=1.6,<2.0
 PyYAML>=5.3
 requests>=2.25      # fan_controller.py Huawei iBMC Redfish backend only
-paramiko>=2.7       # fan_controller.py HPE iLO4 SSH backend only
+# HPE iLO4 backend uses the system ssh client + sshpass (apt install sshpass
+# openssh-client) for fan control — no extra Python packages needed.

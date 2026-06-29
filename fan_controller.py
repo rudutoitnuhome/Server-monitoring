@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -395,45 +396,63 @@ class HuaweiSnmp:
         return out
 
 
+# iLO4's SSH server only offers legacy algorithms that modern paramiko/OpenSSH
+# disable by default. We shell out to the system ssh client and re-enable them
+# with "+", which is the reliable, well-tested path for iLO4.
+_ILO_SSH_OPTS = [
+    "-oKexAlgorithms=+diffie-hellman-group14-sha1,diffie-hellman-group1-sha1,diffie-hellman-group-exchange-sha1",
+    "-oHostKeyAlgorithms=+ssh-rsa,ssh-dss",
+    "-oCiphers=+aes128-cbc,aes256-cbc,3des-cbc",
+    "-oMACs=+hmac-sha1",
+    "-oStrictHostKeyChecking=no",
+    "-oUserKnownHostsFile=/dev/null",
+    "-oConnectTimeout=15",
+    "-oLogLevel=ERROR",
+]
+
+
 class HpeIlo:
     """HPE iLO4 (Gen8/Gen9) fan control over SSH.
 
     Requires iLO firmware patched with ilo4_unlock so the `fan` CLI command is
     available. Forces each fan PWM with `fan p <id> lock <pwm>` (0-255) and
     releases with `fan p <id> unlock`. Optionally reads ambient temps via
-    ipmitool. iLO4 needs legacy SSH algorithms, which paramiko negotiates.
+    ipmitool. Uses the system `ssh` client (+ `sshpass` for password auth) with
+    legacy algorithms re-enabled, since iLO4's SSH is too old for paramiko.
     """
 
     def __init__(self, cfg: dict):
-        try:
-            import paramiko  # noqa: F401
-        except ImportError:
-            raise IpmiError("HPE iLO needs the 'paramiko' package")
         self.cfg = cfg
         if not cfg.get("host"):
             raise IpmiError("hpe.host (iLO IP) is required for the hpe vendor")
+        if cfg.get("password") and not shutil.which("sshpass"):
+            raise IpmiError("HPE password auth needs 'sshpass' (apt install sshpass)")
+        if not shutil.which("ssh"):
+            raise IpmiError("HPE iLO needs the ssh client (apt install openssh-client)")
         self.fans = list(cfg.get("fans") or [])
         self.pwm_max = int(cfg.get("pwm_max", 255))
         self._ipmi = DellIpmi(cfg["ipmi"]) if cfg.get("ipmi") else None  # ambient only
 
+    def _ssh_base(self) -> list[str]:
+        host = self.cfg["host"]
+        user = self.cfg.get("username") or "Administrator"
+        port = str(self.cfg.get("ssh_port", 22))
+        cmd: list[str] = []
+        if self.cfg.get("password"):
+            cmd += ["sshpass", "-p", self.cfg["password"]]
+        cmd += ["ssh"] + _ILO_SSH_OPTS + ["-p", port, f"{user}@{host}"]
+        return cmd
+
     def _ssh_run(self, commands: list[str]) -> str:
-        import paramiko
-        cli = paramiko.SSHClient()
-        cli.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        cli.connect(
-            self.cfg["host"], port=int(self.cfg.get("ssh_port", 22)),
-            username=self.cfg.get("username"), password=self.cfg.get("password"),
-            look_for_keys=False, allow_agent=False, timeout=15,
-            disabled_algorithms={},   # keep legacy KEX/host-key algos for iLO4
-        )
         out: list[str] = []
-        try:
-            for cmd in commands:
-                _in, stdout, stderr = cli.exec_command(cmd, timeout=15)
-                out.append(stdout.read().decode("utf-8", "ignore") +
-                           stderr.read().decode("utf-8", "ignore"))
-        finally:
-            cli.close()
+        base = self._ssh_base()
+        for cmd in commands:
+            proc = subprocess.run(base + [cmd], capture_output=True,
+                                  text=True, timeout=25)
+            if proc.returncode != 0:
+                raise IpmiError(
+                    f"ssh '{cmd}' failed: {proc.stderr.strip() or proc.stdout.strip()}")
+            out.append(proc.stdout)
         return "\n".join(out)
 
     def begin_manual(self):
