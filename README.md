@@ -181,6 +181,17 @@ journalctl -u fan-controller -f
 > use it to confirm the curve picks sane values before handing over real control.
 > Needs `ipmitool` on the host (`apt install ipmitool`).
 
+Fan test (`--ramp`) — verify control end-to-end from the terminal. It engages
+manual mode, ramps through the steps holding each, then restores automatic
+control (and restores auto even if a step errors):
+
+```bash
+sudo /opt/server-monitor/venv/bin/python /opt/server-monitor/fan_controller.py --ramp
+#   -> manual, 100% (hold 15s), 15% (hold 15s), back to auto
+# customise:
+sudo .../fan_controller.py --ramp --steps 100,50,15 --hold 20
+```
+
 ### Huawei (iMana 200 / iBMC)
 
 Huawei controls fans over **SNMP** (the Huawei enterprise MIB), not raw IPMI or

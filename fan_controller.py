@@ -793,7 +793,36 @@ def parse_args(argv=None):
     p.add_argument("--probe", action="store_true",
                    help="Dump the BMC's temperature/fan schema and exit "
                    "(read-only; use it to confirm the Huawei Redfish payloads)")
+    p.add_argument("--ramp", action="store_true",
+                   help="Fan test: engage manual, ramp through --steps holding "
+                   "each, then restore automatic control. No MQTT.")
+    p.add_argument("--steps", default="100,15",
+                   help="Comma-separated fan %% steps for --ramp (default 100,15)")
+    p.add_argument("--hold", type=int, default=15,
+                   help="Seconds to hold each --ramp step (default 15)")
     return p.parse_args(argv)
+
+
+def run_ramp(cfg: dict, steps: list[int], hold: int):
+    """Manually exercise the fan backend: manual -> each step -> restore auto."""
+    bmc = make_ipmi(cfg)
+    log.info("Engaging manual fan control")
+    bmc.begin_manual()
+    try:
+        for pct in steps:
+            log.info("Fans -> %s%%  (holding %ss — listen / watch the BMC)", pct, hold)
+            bmc.set_percent(pct)
+            try:
+                for name, value in bmc.read_temperatures():
+                    if any(k in name.lower() for k in ("inlet", "exhaust", "ambient")):
+                        log.info("    %s: %.1f °C", name, value)
+            except Exception:
+                pass
+            time.sleep(hold)
+    finally:
+        log.info("Restoring automatic fan control")
+        bmc.restore_auto()
+    log.info("Ramp test complete — fans back on automatic control")
 
 
 def main():
@@ -807,6 +836,24 @@ def main():
             print(make_ipmi(cfg).probe())
         except Exception as exc:
             log.error("Probe failed: %s", exc)
+            sys.exit(1)
+        return
+
+    if args.ramp:
+        try:
+            steps = [max(0, min(100, int(s))) for s in args.steps.split(",") if s.strip()]
+        except ValueError:
+            log.error("Bad --steps value: %r", args.steps)
+            sys.exit(1)
+        try:
+            run_ramp(cfg, steps, args.hold)
+        except Exception as exc:
+            log.error("Ramp test failed: %s", exc)
+            # best effort: hand fans back to the BMC
+            try:
+                make_ipmi(cfg).restore_auto()
+            except Exception:
+                pass
             sys.exit(1)
         return
 
