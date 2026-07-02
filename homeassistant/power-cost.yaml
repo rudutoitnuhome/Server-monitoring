@@ -36,6 +36,9 @@ utility_meter:
   plex_energy_monthly:
     source: sensor.plex_summation_delivered
     cycle: monthly
+  smol_dell_energy_monthly:
+    source: sensor.tz3000_303avxxt_ts011f_summation_delivered
+    cycle: monthly
 
 template:
   - sensor:
@@ -64,6 +67,14 @@ template:
           {{ (states('sensor.plex_power') | float(0) / 1000 * 24 * 30.44
               * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
 
+      - name: Smol Dell Projected Monthly Cost
+        unique_id: smol_dell_projected_monthly_cost
+        unit_of_measurement: R
+        icon: mdi:cash-clock
+        state: >
+          {{ (states('sensor.tz3000_303avxxt_ts011f_power') | float(0) / 1000 * 24 * 30.44
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
       - name: Servers Projected Monthly Cost
         unique_id: servers_projected_monthly_cost
         unit_of_measurement: R
@@ -71,7 +82,8 @@ template:
         state: >
           {% set p = states('sensor.dell_power') | float(0)
                    + states('sensor.huawei_power') | float(0)
-                   + states('sensor.plex_power') | float(0) %}
+                   + states('sensor.plex_power') | float(0)
+                   + states('sensor.tz3000_303avxxt_ts011f_power') | float(0) %}
           {{ (p / 1000 * 24 * 30.44
               * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
 
@@ -100,6 +112,14 @@ template:
           {{ (states('sensor.plex_energy_monthly') | float(0)
               * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
 
+      - name: Smol Dell Cost This Month
+        unique_id: smol_dell_cost_this_month
+        unit_of_measurement: R
+        icon: mdi:cash
+        state: >
+          {{ (states('sensor.smol_dell_energy_monthly') | float(0)
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
       - name: Servers Cost This Month
         unique_id: servers_cost_this_month
         unit_of_measurement: R
@@ -107,7 +127,8 @@ template:
         state: >
           {% set k = states('sensor.dell_energy_monthly') | float(0)
                    + states('sensor.huawei_energy_monthly') | float(0)
-                   + states('sensor.plex_energy_monthly') | float(0) %}
+                   + states('sensor.plex_energy_monthly') | float(0)
+                   + states('sensor.smol_dell_energy_monthly') | float(0) %}
           {{ (k * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
 
       # ---------- Handy extras ----------
@@ -119,7 +140,8 @@ template:
         state: >
           {{ (states('sensor.dell_power') | float(0)
             + states('sensor.huawei_power') | float(0)
-            + states('sensor.plex_power') | float(0)) | round(0) }}
+            + states('sensor.plex_power') | float(0)
+            + states('sensor.tz3000_303avxxt_ts011f_power') | float(0)) | round(0) }}
 
       - name: Servers Energy This Month
         unique_id: servers_energy_this_month
@@ -129,4 +151,5 @@ template:
         state: >
           {{ (states('sensor.dell_energy_monthly') | float(0)
             + states('sensor.huawei_energy_monthly') | float(0)
-            + states('sensor.plex_energy_monthly') | float(0)) | round(2) }}
+            + states('sensor.plex_energy_monthly') | float(0)
+            + states('sensor.smol_dell_energy_monthly') | float(0)) | round(2) }}
