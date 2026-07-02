@@ -1,0 +1,132 @@
+# Server power-cost sensors (South Africa, flat R/kWh).
+#
+# Install as a Home Assistant *package* so it coexists with your existing
+# template: sensors. In configuration.yaml add (once):
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# then put this file at  config/packages/power_cost.yaml  and restart HA
+# (utility_meter + input_number need a restart; template sensors can reload).
+#
+# Two kinds of sensor per server:
+#   * "Projected Monthly Cost" — if it keeps drawing its CURRENT watts all month.
+#   * "Cost This Month"        — actual spend so far, from the energy total via a
+#                                monthly-resetting utility_meter.
+# The tariff is an adjustable slider (input_number.electricity_tariff, default 3.56).
+
+input_number:
+  electricity_tariff:
+    name: Electricity tariff
+    min: 0
+    max: 20
+    step: 0.01
+    initial: 3.56
+    unit_of_measurement: R/kWh
+    icon: mdi:cash
+
+# Monthly-resetting energy meters fed from the ever-increasing summation totals.
+utility_meter:
+  dell_energy_monthly:
+    source: sensor.dell_summation_delivered
+    cycle: monthly
+  huawei_energy_monthly:
+    source: sensor.huawei_summation_delivered
+    cycle: monthly
+  plex_energy_monthly:
+    source: sensor.plex_summation_delivered
+    cycle: monthly
+
+template:
+  - sensor:
+      # ---------- Projected monthly cost (at current power draw) ----------
+      - name: Dell Projected Monthly Cost
+        unique_id: dell_projected_monthly_cost
+        unit_of_measurement: R
+        icon: mdi:cash-clock
+        state: >
+          {{ (states('sensor.dell_power') | float(0) / 1000 * 24 * 30.44
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      - name: Huawei Projected Monthly Cost
+        unique_id: huawei_projected_monthly_cost
+        unit_of_measurement: R
+        icon: mdi:cash-clock
+        state: >
+          {{ (states('sensor.huawei_power') | float(0) / 1000 * 24 * 30.44
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      - name: Plex Projected Monthly Cost
+        unique_id: plex_projected_monthly_cost
+        unit_of_measurement: R
+        icon: mdi:cash-clock
+        state: >
+          {{ (states('sensor.plex_power') | float(0) / 1000 * 24 * 30.44
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      - name: Servers Projected Monthly Cost
+        unique_id: servers_projected_monthly_cost
+        unit_of_measurement: R
+        icon: mdi:cash-clock
+        state: >
+          {% set p = states('sensor.dell_power') | float(0)
+                   + states('sensor.huawei_power') | float(0)
+                   + states('sensor.plex_power') | float(0) %}
+          {{ (p / 1000 * 24 * 30.44
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      # ---------- Cost so far this month (from the monthly energy meters) ----------
+      - name: Dell Cost This Month
+        unique_id: dell_cost_this_month
+        unit_of_measurement: R
+        icon: mdi:cash
+        state: >
+          {{ (states('sensor.dell_energy_monthly') | float(0)
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      - name: Huawei Cost This Month
+        unique_id: huawei_cost_this_month
+        unit_of_measurement: R
+        icon: mdi:cash
+        state: >
+          {{ (states('sensor.huawei_energy_monthly') | float(0)
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      - name: Plex Cost This Month
+        unique_id: plex_cost_this_month
+        unit_of_measurement: R
+        icon: mdi:cash
+        state: >
+          {{ (states('sensor.plex_energy_monthly') | float(0)
+              * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      - name: Servers Cost This Month
+        unique_id: servers_cost_this_month
+        unit_of_measurement: R
+        icon: mdi:cash
+        state: >
+          {% set k = states('sensor.dell_energy_monthly') | float(0)
+                   + states('sensor.huawei_energy_monthly') | float(0)
+                   + states('sensor.plex_energy_monthly') | float(0) %}
+          {{ (k * states('input_number.electricity_tariff') | float(3.56)) | round(2) }}
+
+      # ---------- Handy extras ----------
+      - name: Servers Power Now
+        unique_id: servers_power_now
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: >
+          {{ (states('sensor.dell_power') | float(0)
+            + states('sensor.huawei_power') | float(0)
+            + states('sensor.plex_power') | float(0)) | round(0) }}
+
+      - name: Servers Energy This Month
+        unique_id: servers_energy_this_month
+        unit_of_measurement: kWh
+        device_class: energy
+        state_class: total
+        state: >
+          {{ (states('sensor.dell_energy_monthly') | float(0)
+            + states('sensor.huawei_energy_monthly') | float(0)
+            + states('sensor.plex_energy_monthly') | float(0)) | round(2) }}
