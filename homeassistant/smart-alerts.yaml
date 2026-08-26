@@ -1,0 +1,113 @@
+# SMART disk alerts for the TrueNasty server-monitor sensors.
+#
+# Three automations:
+#   1. SMART health / self-test FAILED  -> a drive says it is failing, act now
+#   2. Bad sectors appeared             -> early warning, plan a replacement
+#   3. CRC errors growing               -> SATA cable/link problem, reseat/swap
+#
+# To install: Settings -> Automations & Scenes -> Create Automation ->
+# "Start with an empty automation" -> three-dot menu -> Edit in YAML -> paste
+# ONE list item (without the leading "- ") per automation. If you keep an
+# automations.yaml include, paste all three items as-is instead.
+#
+# Notifications use persistent_notification, which always exists. To also get
+# a phone push, add your mobile app service to the actions, e.g.:
+#   - service: notify.mobile_app_<your_phone>
+#     data:
+#       title: "{{ title }}"
+#       message: "{{ message }}"
+#
+# Entity ids come from MQTT discovery: sensor.truenasty_disk_<serial>_<metric>.
+# HDD serials: zxa0laeb / zxa0pf3d / zxa0kss6 / zxa0m067 (4x Exos 28TB raidz1)
+# NVMe serials: y2sc33bwe6ak (boot) / z21c10gte6ak (L2ARC cache)
+# Add new drives here when the pool changes.
+
+- id: truenasty_smart_health_failed
+  alias: "TrueNasty: disk SMART health FAILED"
+  description: >-
+    A drive's overall SMART status or its last self-test reports failure.
+    This is the drive itself predicting death — replace it promptly.
+  mode: single
+  trigger:
+    - platform: numeric_state
+      entity_id:
+        - sensor.truenasty_disk_zxa0laeb_smart_ok
+        - sensor.truenasty_disk_zxa0pf3d_smart_ok
+        - sensor.truenasty_disk_zxa0kss6_smart_ok
+        - sensor.truenasty_disk_zxa0m067_smart_ok
+        - sensor.truenasty_disk_y2sc33bwe6ak_smart_ok
+        - sensor.truenasty_disk_z21c10gte6ak_smart_ok
+        - sensor.truenasty_disk_zxa0laeb_selftest_ok
+        - sensor.truenasty_disk_zxa0pf3d_selftest_ok
+        - sensor.truenasty_disk_zxa0kss6_selftest_ok
+        - sensor.truenasty_disk_zxa0m067_selftest_ok
+      below: 1
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "🔴 TrueNAS drive FAILING"
+        message: >-
+          {{ trigger.to_state.attributes.friendly_name }} reports FAILED
+          (value {{ trigger.to_state.state }}). SMART failure predictions are
+          usually terminal — replace this drive as soon as possible. The pool
+          is raidz1: it survives exactly one dead drive.
+
+- id: truenasty_smart_bad_sectors
+  alias: "TrueNasty: disk bad sectors detected"
+  description: >-
+    Reallocated, pending, or uncorrectable sectors appeared on an HDD (or media
+    errors on an NVMe). The drive still works but the platters are degrading.
+  mode: single
+  trigger:
+    - platform: numeric_state
+      entity_id:
+        - sensor.truenasty_disk_zxa0laeb_realloc
+        - sensor.truenasty_disk_zxa0pf3d_realloc
+        - sensor.truenasty_disk_zxa0kss6_realloc
+        - sensor.truenasty_disk_zxa0m067_realloc
+        - sensor.truenasty_disk_zxa0laeb_pending
+        - sensor.truenasty_disk_zxa0pf3d_pending
+        - sensor.truenasty_disk_zxa0kss6_pending
+        - sensor.truenasty_disk_zxa0m067_pending
+        - sensor.truenasty_disk_zxa0laeb_uncorrect
+        - sensor.truenasty_disk_zxa0pf3d_uncorrect
+        - sensor.truenasty_disk_zxa0kss6_uncorrect
+        - sensor.truenasty_disk_zxa0m067_uncorrect
+        - sensor.truenasty_disk_y2sc33bwe6ak_media_err
+        - sensor.truenasty_disk_z21c10gte6ak_media_err
+      above: 0
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "🟠 TrueNAS drive developing bad sectors"
+        message: >-
+          {{ trigger.to_state.attributes.friendly_name }} is now
+          {{ trigger.to_state.state }}. Bad sectors tend to multiply — run a
+          long SMART test, scrub the pool, and budget for a replacement drive.
+
+- id: truenasty_smart_crc_errors
+  alias: "TrueNasty: disk CRC errors growing (cabling)"
+  description: >-
+    UDMA CRC errors are corruption on the SATA cable/link, not the platters.
+    ZXA0LAEB sits at a lifetime count of 49 from the Aug 2026 incident, so it
+    only alerts above that; any other drive alerts on the first error.
+  mode: single
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.truenasty_disk_zxa0laeb_crc_err
+      above: 49
+    - platform: numeric_state
+      entity_id:
+        - sensor.truenasty_disk_zxa0pf3d_crc_err
+        - sensor.truenasty_disk_zxa0kss6_crc_err
+        - sensor.truenasty_disk_zxa0m067_crc_err
+      above: 0
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "🟡 TrueNAS SATA cable problem"
+        message: >-
+          {{ trigger.to_state.attributes.friendly_name }} rose to
+          {{ trigger.to_state.state }}. CRC errors mean the SATA data cable or
+          port is corrupting data in flight (ZFS will show checksum errors).
+          Reseat or replace that drive's cable — the drive itself is likely fine.
