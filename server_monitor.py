@@ -57,6 +57,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "base_topic": "server-monitor",
     "cpu": {"enabled": True, "per_core": False},
     "disks": {"enabled": True, "skip_standby": True},
+    # SMART health per disk (requires disks.enabled). Publishes an overall
+    # pass/fail flag plus the attributes that actually predict failure, and
+    # periodically kicks off a drive self-test. Standby drives are never woken.
+    "smart": {
+        "enabled": True,
+        "test": "short",             # short | long | none — recurring self-test
+        "test_interval_hours": 24,   # how often to launch it per disk
+    },
     "gpu": {"enabled": True},
     "system": {"enabled": True},  # CPU usage, IO wait, memory, load average, uptime
     "network": {
@@ -330,8 +338,8 @@ def _read_text(path: str) -> str | None:
 
 # ---- Disks ---------------------------------------------------------------- #
 
-def read_disks(skip_standby: bool) -> list[Reading]:
-    """Read drive temperatures via smartctl for every detected device."""
+def read_disks(skip_standby: bool, smart_cfg: dict | None = None) -> list[Reading]:
+    """Read drive temperatures (and optionally SMART health) via smartctl."""
     if not shutil.which("smartctl"):
         return []
     scan = _run(["smartctl", "--scan-open", "-j"])
@@ -348,43 +356,140 @@ def read_disks(skip_standby: bool) -> list[Reading]:
         if not name:
             continue
         dev_type = dev.get("type", "auto")
-        reading = _read_one_disk(name, dev_type, skip_standby)
-        if reading is not None:
-            readings.append(reading)
+        readings += _read_one_disk(name, dev_type, skip_standby, smart_cfg)
     return readings
 
 
-def _read_one_disk(name: str, dev_type: str, skip_standby: bool) -> Reading | None:
+# When each device's recurring self-test was last launched (monotonic seconds).
+# In-memory only: a restart re-launches at most one extra short test per drive.
+_last_selftest: dict[str, float] = {}
+
+
+def _read_one_disk(
+    name: str, dev_type: str, skip_standby: bool, smart_cfg: dict | None
+) -> list[Reading]:
+    want_smart = bool(smart_cfg and smart_cfg.get("enabled"))
     cmd = ["smartctl", "-j", "-A", "-i", "-d", dev_type]
+    if want_smart:
+        cmd += ["-H", "-l", "selftest"]
     if skip_standby:
         # -n standby: exit without spinning the drive up if it is asleep
         cmd += ["-n", "standby"]
     cmd.append(name)
     proc = _run(cmd)
     if not proc or not proc.stdout:
-        return None
+        return []
     try:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError:
-        return None
+        return []
 
     # Drive is in standby — skip silently so we don't wake it.
     if skip_standby and _is_standby(data):
         log.debug("%s is in standby, skipping", name)
-        return None
-
-    temp = data.get("temperature", {}).get("current")
-    if temp is None:
-        return None
+        return []
 
     serial = data.get("serial_number") or slugify(name)
     model = data.get("model_name") or data.get("device", {}).get("name", "")
     short = os.path.basename(name)
-    key = f"disk_{slugify(str(serial))}_temp"
-    label = f"Disk {short}"
-    if model:
-        label = f"Disk {short} ({model})"
-    return Reading(key, label, float(temp))
+    prefix = f"disk_{slugify(str(serial))}"
+    label = f"Disk {short} ({model})" if model else f"Disk {short}"
+
+    readings: list[Reading] = []
+    temp = data.get("temperature", {}).get("current")
+    if temp is not None:
+        readings.append(Reading(f"{prefix}_temp", label, float(temp)))
+
+    if want_smart:
+        readings += _smart_readings(data, prefix, short)
+        _maybe_start_selftest(name, dev_type, data, smart_cfg)
+    return readings
+
+
+def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
+    """SMART health flag + the attributes that predict drive failure."""
+    out: list[Reading] = []
+
+    passed = data.get("smart_status", {}).get("passed")
+    if passed is not None:
+        out.append(Reading(
+            f"{prefix}_smart_ok", f"Disk {short} SMART OK",
+            1.0 if passed else 0.0, unit=None, device_class=None,
+            state_class=None, icon="mdi:harddisk",
+        ))
+
+    # ATA/SATA drives: raw values of the canonical pre-failure attributes.
+    attr_map = {
+        5: ("realloc", "Reallocated Sectors"),
+        197: ("pending", "Pending Sectors"),
+        198: ("uncorrect", "Uncorrectable Sectors"),
+        199: ("crc_err", "CRC Errors"),
+    }
+    for row in data.get("ata_smart_attributes", {}).get("table", []) or []:
+        entry = attr_map.get(row.get("id"))
+        if not entry:
+            continue
+        raw = row.get("raw", {}).get("value")
+        if isinstance(raw, (int, float)):
+            key, attr_label = entry
+            out.append(Reading(
+                f"{prefix}_{key}", f"Disk {short} {attr_label}", float(raw),
+                unit=None, device_class=None, icon="mdi:harddisk-plus",
+            ))
+
+    # Last completed self-test verdict (entry 0 is the most recent).
+    st_log = data.get("ata_smart_self_test_log", {}).get("standard", {})
+    st_table = st_log.get("table", []) or []
+    if st_table:
+        st_passed = st_table[0].get("status", {}).get("passed")
+        if st_passed is not None:
+            out.append(Reading(
+                f"{prefix}_selftest_ok", f"Disk {short} Self-test OK",
+                1.0 if st_passed else 0.0, unit=None, device_class=None,
+                state_class=None, icon="mdi:harddisk-plus",
+            ))
+
+    # NVMe drives report a different health log.
+    nvme = data.get("nvme_smart_health_information_log")
+    if nvme:
+        for src, key, attr_label, unit in (
+            ("percentage_used", "wear", "Wear", "%"),
+            ("available_spare", "spare", "Spare", "%"),
+            ("media_errors", "media_err", "Media Errors", None),
+        ):
+            value = nvme.get(src)
+            if isinstance(value, (int, float)):
+                out.append(Reading(
+                    f"{prefix}_{key}", f"Disk {short} {attr_label}", float(value),
+                    unit=unit, device_class=None, icon="mdi:harddisk-plus",
+                ))
+    return out
+
+
+def _maybe_start_selftest(name: str, dev_type: str, data: dict, smart_cfg: dict):
+    """Launch the recurring drive self-test when one is due (non-blocking)."""
+    test = str(smart_cfg.get("test") or "none").lower()
+    if test not in ("short", "long"):
+        return
+    interval = float(smart_cfg.get("test_interval_hours", 24)) * 3600
+    now = time.monotonic()
+    last = _last_selftest.get(name)
+    if last is not None and now - last < interval:
+        return
+
+    # A test already running (started by us pre-restart, or by hand) counts.
+    status = data.get("ata_smart_data", {}).get("self_test", {}).get("status", {})
+    if "in progress" in str(status.get("string", "")).lower():
+        _last_selftest[name] = now
+        return
+
+    proc = _run(["smartctl", "-j", "-t", test, "-d", dev_type, name])
+    _last_selftest[name] = now
+    if proc and proc.returncode == 0:
+        log.info("Started %s SMART self-test on %s", test, name)
+    else:
+        err = (proc.stderr or proc.stdout or "").strip() if proc else "smartctl missing"
+        log.warning("Could not start %s self-test on %s: %s", test, name, err[:200])
 
 
 def _is_standby(data: dict) -> bool:
@@ -755,7 +860,7 @@ def collect(cfg: dict) -> list[Reading]:
     if cfg["cpu"]["enabled"]:
         readings += read_cpu(cfg["cpu"].get("per_core", False))
     if cfg["disks"]["enabled"]:
-        readings += read_disks(cfg["disks"].get("skip_standby", True))
+        readings += read_disks(cfg["disks"].get("skip_standby", True), cfg.get("smart"))
     if cfg["gpu"]["enabled"]:
         readings += read_gpu()
     if cfg["system"]["enabled"]:

@@ -26,6 +26,12 @@ disks:
   enabled: true
   skip_standby: true        # do NOT spin up sleeping drives just to read temp
 
+smart:                      # per-disk SMART health (requires disks.enabled)
+  enabled: true             # overall pass/fail + reallocated/pending/uncorrectable/CRC
+                            # (NVMe: wear %, spare %, media errors) + last self-test verdict
+  test: short               # short | long | none — recurring drive self-test
+  test_interval_hours: 24   # how often to launch it per disk (standby drives are skipped)
+
 gpu:
   enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)
 
