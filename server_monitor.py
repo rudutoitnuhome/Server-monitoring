@@ -449,6 +449,33 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
                 state_class=None, icon="mdi:harddisk-plus",
             ))
 
+    # SAS/SCSI drives have no ATA attribute table: the grown defect list is the
+    # reallocated-sector equivalent, and the error counter log carries the
+    # uncorrected read/write counts. Both are the early-warning numbers here.
+    defects = data.get("scsi_grown_defect_list")
+    if isinstance(defects, (int, float)):
+        out.append(Reading(
+            f"{prefix}_defects", f"Disk {short} Grown Defects", float(defects),
+            unit=None, device_class=None, icon="mdi:harddisk-plus",
+        ))
+    counters = data.get("scsi_error_counter_log") or {}
+    for op in ("read", "write"):
+        value = (counters.get(op) or {}).get("total_uncorrected_errors")
+        if isinstance(value, (int, float)):
+            out.append(Reading(
+                f"{prefix}_{op}_uncorrect", f"Disk {short} Uncorrected {op.title()}s",
+                float(value), unit=None, device_class=None, icon="mdi:harddisk-plus",
+            ))
+    # SAS self-test log: entry 0 is the most recent; result value 0 == passed.
+    sas_test = data.get("scsi_self_test_0") or {}
+    sas_result = (sas_test.get("result") or {}).get("value")
+    if isinstance(sas_result, int):
+        out.append(Reading(
+            f"{prefix}_selftest_ok", f"Disk {short} Self-test OK",
+            1.0 if sas_result == 0 else 0.0, unit=None, device_class=None,
+            state_class=None, icon="mdi:harddisk-plus",
+        ))
+
     # NVMe drives report a different health log.
     nvme = data.get("nvme_smart_health_information_log")
     if nvme:
@@ -477,9 +504,13 @@ def _maybe_start_selftest(name: str, dev_type: str, data: dict, smart_cfg: dict)
     if last is not None and now - last < interval:
         return
 
-    # A test already running (started by us pre-restart, or by hand) counts.
-    status = data.get("ata_smart_data", {}).get("self_test", {}).get("status", {})
-    if "in progress" in str(status.get("string", "")).lower():
+    # A test already running (started by us pre-restart, or by hand) counts —
+    # starting another one would abort it. ATA and SAS report this differently.
+    ata_status = data.get("ata_smart_data", {}).get("self_test", {}).get("status", {})
+    sas_status = (data.get("scsi_self_test_0") or {}).get("result", {})
+    running = any("in progress" in str(s.get("string", "")).lower()
+                  for s in (ata_status, sas_status))
+    if running or sas_status.get("value") == 15:
         _last_selftest[name] = now
         return
 
