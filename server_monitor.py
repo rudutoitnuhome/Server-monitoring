@@ -65,6 +65,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "test": "short",             # short | long | none — recurring self-test
         "test_interval_hours": 24,   # how often to launch it per disk
     },
+    # Park idle drives. A drive whose SMART is polled every cycle never reaches
+    # its own idle timeout (each poll resets the firmware's timer), so the
+    # monitor has to issue the standby command itself.
+    "spindown": {
+        "enabled": False,            # opt-in: never park drives unasked
+        "after_minutes": 30,         # real disk I/O must be absent this long
+        "serials": [],               # only these drives; empty = every spinning disk
+    },
     "gpu": {"enabled": True},
     "system": {"enabled": True},  # CPU usage, IO wait, memory, load average, uptime
     "network": {
@@ -338,7 +346,8 @@ def _read_text(path: str) -> str | None:
 
 # ---- Disks ---------------------------------------------------------------- #
 
-def read_disks(skip_standby: bool, smart_cfg: dict | None = None) -> list[Reading]:
+def read_disks(skip_standby: bool, smart_cfg: dict | None = None,
+               spindown_cfg: dict | None = None) -> list[Reading]:
     """Read drive temperatures (and optionally SMART health) via smartctl."""
     if not shutil.which("smartctl"):
         return []
@@ -356,7 +365,8 @@ def read_disks(skip_standby: bool, smart_cfg: dict | None = None) -> list[Readin
         if not name:
             continue
         dev_type = dev.get("type", "auto")
-        readings += _read_one_disk(name, dev_type, skip_standby, smart_cfg)
+        readings += _read_one_disk(name, dev_type, skip_standby, smart_cfg,
+                                   spindown_cfg)
     return readings
 
 
@@ -366,7 +376,8 @@ _last_selftest: dict[str, float] = {}
 
 
 def _read_one_disk(
-    name: str, dev_type: str, skip_standby: bool, smart_cfg: dict | None
+    name: str, dev_type: str, skip_standby: bool, smart_cfg: dict | None,
+    spindown_cfg: dict | None = None,
 ) -> list[Reading]:
     want_smart = bool(smart_cfg and smart_cfg.get("enabled"))
     cmd = ["smartctl", "-j", "-A", "-i", "-d", dev_type]
@@ -403,7 +414,67 @@ def _read_one_disk(
     if want_smart:
         readings += _smart_readings(data, prefix, short)
         _maybe_start_selftest(name, dev_type, data, smart_cfg)
+    if spindown_cfg:
+        _maybe_spindown(name, dev_type, str(serial), spindown_cfg)
     return readings
+
+
+# Per-device I/O counters for the spindown feature: dev -> (counters, unchanged since)
+_disk_activity: dict[str, tuple[tuple[int, int], float]] = {}
+
+
+def _read_io_counters(dev: str) -> tuple[int, int] | None:
+    """(sectors read, sectors written) for a block device.
+
+    SMART polling reaches the drive through ioctl passthrough, which the block
+    layer does not account for, so these counters only move for real I/O — which
+    is exactly what "has this disk been used" should mean here.
+    """
+    raw = _read_text(f"/sys/block/{dev}/stat")
+    if not raw:
+        return None
+    fields = raw.split()
+    if len(fields) < 8:
+        return None
+    try:
+        return int(fields[2]), int(fields[6])
+    except ValueError:
+        return None
+
+
+def _maybe_spindown(name: str, dev_type: str, serial: str, cfg: dict):
+    """Issue STANDBY to a drive that has seen no real I/O for long enough."""
+    if not cfg.get("enabled"):
+        return
+    wanted = {str(s).strip().upper() for s in (cfg.get("serials") or [])}
+    if wanted and serial.upper() not in wanted:
+        return
+    dev = os.path.basename(name)
+    if _read_text(f"/sys/block/{dev}/queue/rotational") != "1":
+        return                      # SSDs and NVMe have nothing to park
+    counters = _read_io_counters(dev)
+    if counters is None:
+        return
+
+    now = time.monotonic()
+    previous = _disk_activity.get(dev)
+    if previous is None or previous[0] != counters:
+        _disk_activity[dev] = (counters, now)   # fresh I/O — restart the clock
+        return
+
+    idle_for = now - previous[1]
+    if idle_for < float(cfg.get("after_minutes", 30)) * 60:
+        return
+
+    proc = _run(["smartctl", "-s", "standby,now", "-d", dev_type, name])
+    if proc and proc.returncode == 0:
+        log.info("Spun down %s (%s) after %.0f min idle", name, serial, idle_for / 60)
+    else:
+        err = (proc.stderr or proc.stdout or "").strip() if proc else "smartctl missing"
+        log.warning("Could not spin down %s: %s", name, err[:200])
+    # Restart the clock either way, so a drive that refuses to park is not
+    # commanded on every single cycle.
+    _disk_activity[dev] = (counters, now)
 
 
 def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
@@ -891,7 +962,8 @@ def collect(cfg: dict) -> list[Reading]:
     if cfg["cpu"]["enabled"]:
         readings += read_cpu(cfg["cpu"].get("per_core", False))
     if cfg["disks"]["enabled"]:
-        readings += read_disks(cfg["disks"].get("skip_standby", True), cfg.get("smart"))
+        readings += read_disks(cfg["disks"].get("skip_standby", True),
+                               cfg.get("smart"), cfg.get("spindown"))
     if cfg["gpu"]["enabled"]:
         readings += read_gpu()
     if cfg["system"]["enabled"]:

@@ -32,6 +32,16 @@ smart:                      # per-disk SMART health (requires disks.enabled)
   test: short               # short | long | none — recurring drive self-test
   test_interval_hours: 24   # how often to launch it per disk (standby drives are skipped)
 
+spindown:                   # park idle drives (needs disks.enabled)
+  enabled: false            # opt-in
+  after_minutes: 30         # no real disk I/O for this long -> issue STANDBY
+  serials: []               # only these drives, e.g. [ZXA0LAEB, ZXA0M067];
+                            # empty = every spinning disk (SSD/NVMe never touched)
+  # Why this exists: polling a drive's SMART every cycle resets its firmware
+  # idle timer, so a drive with an hddstandby/-S setting may never park on its
+  # own. Real I/O is measured from /sys/block/<dev>/stat, which SMART's ioctl
+  # passthrough does not touch. Once asleep, disks.skip_standby keeps it asleep.
+
 gpu:
   enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)
 
