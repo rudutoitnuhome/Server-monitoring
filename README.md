@@ -136,6 +136,42 @@ Check logs from the app's shell or:
 docker logs -f server-monitor
 ```
 
+## TrueNAS: recovering the docker boot race
+
+`truenas/docker-boot-check.sh` fixes a failure mode that leaves **every app down
+after a reboot**, reporting:
+
+    Application(s) have failed to start:
+    [EFAULT] Unable to determine default interface
+
+TrueNAS starts docker before a slow DHCP lease has landed. Its pre-start check
+waits up to 60s for the interface *link* but not at all for a *route*, so it
+gives up, marks docker `FAILED`, and never retries — `periodic_check` runs once
+a day and only syncs catalogs. The apps stay down until someone intervenes.
+
+Install it as a **POSTINIT** task (System Settings -> Advanced -> Init/Shutdown
+Scripts, or the API), pointing at a copy on a **data pool** — `/home` lives
+inside the boot environment and is version-specific:
+
+```bash
+sudo install -D -m 755 truenas/docker-boot-check.sh /mnt/<POOL>/apps/scripts/docker-boot-check.sh
+midclt call initshutdownscript.create '{"type": "SCRIPT",
+  "script": "/mnt/<POOL>/apps/scripts/docker-boot-check.sh",
+  "when": "POSTINIT", "enabled": true, "timeout": 300,
+  "comment": "Start docker if the boot DHCP race left it FAILED"}'
+```
+
+`timeout` matters: the task is killed at that deadline, and the script waits up
+to ~3 minutes. It logs beside itself, exits untouched when docker is healthy,
+and never starts a service whose startup is already in progress.
+
+To fix it by hand once (note `docker.update` does **not** retry the start — it
+only saves config):
+
+```bash
+midclt call docker.state.start_service true
+```
+
 ## Fan control (Dell iDRAC, IPMI)
 
 `fan_controller.py` is an optional companion that drives a server's chassis fans
