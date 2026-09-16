@@ -172,6 +172,47 @@ only saves config):
 midclt call docker.state.start_service true
 ```
 
+## TrueNAS: the NAS stops announcing itself (mDNS / Bonjour)
+
+`truenas/discoveryd-watchdog.sh` covers a second boot-time casualty: the NAS
+stops answering mDNS, so `truenas.local` no longer resolves, SMB shares vanish
+from Finder, and Time Machine cannot discover the target — while SSH and the web
+UI keep working normally.
+
+**TrueNAS 26 has no avahi.** Looking for `avahi-daemon` is a dead end (only an
+empty `/etc/avahi/services` leftover remains). mDNS + NetBIOS-NS + WS-Discovery
+come from iX's own **`truenas-discoveryd`**; the toggles live in Network ->
+Global Configuration (`service_announcement`).
+
+Diagnose — nothing listening on udp/5353 is the tell:
+
+```bash
+ss -lun | grep 5353
+systemctl status truenas-discoveryd      # look for: code=killed, signal=HUP
+midclt call -j service.control START discovery     # the fix, no root needed
+```
+
+Observed here: killed by SIGHUP 221 ms into its run at boot, then dead for four
+days. The unit sets `Restart=on-failure`, and systemd's `on-failure` explicitly
+**excludes** deaths by SIGHUP/SIGINT/SIGTERM/SIGPIPE — so nothing revives it.
+
+Install the watchdog as a **cron task** (config DB, so it survives updates,
+unlike a systemd drop-in) running every 5 minutes as root:
+
+```bash
+sudo install -D -m 755 truenas/discoveryd-watchdog.sh /mnt/<POOL>/apps/scripts/discoveryd-watchdog.sh
+midclt call cronjob.create '{"user": "root",
+  "command": "/mnt/<POOL>/apps/scripts/discoveryd-watchdog.sh",
+  "description": "Revive truenas-discoveryd after SIGHUP kills mDNS/NetBIOS/WSD",
+  "schedule": {"minute": "*/5", "hour": "*", "dom": "*", "month": "*", "dow": "*"},
+  "enabled": true, "stdout": true, "stderr": true}'
+```
+
+It logs only when it intervenes, and respects `service_announcement`: if every
+announcement type is switched off, the daemon is meant to be down and it is left
+alone. Verify from a Mac with `dns-sd -B _smb._tcp local` — a `/etc/hosts` entry
+masks a plain name lookup, but it cannot fake a service browse.
+
 ## Fan control (Dell iDRAC, IPMI)
 
 `fan_controller.py` is an optional companion that drives a server's chassis fans
