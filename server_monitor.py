@@ -73,6 +73,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "after_minutes": 30,         # real disk I/O must be absent this long
         "serials": [],               # only these drives; empty = every spinning disk
     },
+    # ZFS pool health, read from the kernel's kstat. This is the signal that
+    # actually matters on a NAS: a drive that vanishes degrades its pool, and a
+    # vanished drive's own sensors go stale rather than unavailable (HA ignores
+    # empty values for numeric sensors), so per-disk sensors cannot detect it.
+    "zfs": {"enabled": True},
     "gpu": {"enabled": True},
     "system": {"enabled": True},  # CPU usage, IO wait, memory, load average, uptime
     "network": {
@@ -131,7 +136,7 @@ class Reading:
 
     key:          stable identifier used as the JSON field + HA object id suffix
     name:         human-friendly entity name shown in Home Assistant
-    value:        the measured value (float)
+    value:        the measured value (float, or a short string for text sensors)
     unit:         unit of measurement, or None for unitless (e.g. load average)
     device_class: HA device class, or None
     state_class:  HA state class (default "measurement")
@@ -147,7 +152,7 @@ class Reading:
         self,
         key: str,
         name: str,
-        value: float,
+        value: float | str,
         unit: str | None = "°C",
         device_class: str | None = "temperature",
         state_class: str | None = "measurement",
@@ -603,6 +608,38 @@ def _is_standby(data: dict) -> bool:
     return False
 
 
+# ---- ZFS ------------------------------------------------------------------ #
+
+def read_zfs_pools() -> list[Reading]:
+    """Per-pool health from /proc/spl/kstat/zfs/<pool>/state.
+
+    Read from the kernel rather than shelling out to `zpool`: the binary is not
+    in the monitor's container image, and a userland/kernel ZFS version mismatch
+    would be a hazard if it were. The kstat entry needs no root and no tooling,
+    and is visible inside a container because procfs exposes it in every mount.
+    """
+    base = "/proc/spl/kstat/zfs"
+    if not os.path.isdir(base):
+        return []
+    readings: list[Reading] = []
+    for name in sorted(os.listdir(base)):
+        state = _read_text(os.path.join(base, name, "state"))
+        if not state:
+            continue                      # not a pool directory
+        state = state.strip().upper()
+        slug = slugify(name)
+        readings.append(Reading(
+            f"pool_{slug}_healthy", f"Pool {name} Healthy",
+            1.0 if state == "ONLINE" else 0.0,
+            unit=None, device_class=None, state_class=None, icon="mdi:database-check",
+        ))
+        readings.append(Reading(
+            f"pool_{slug}_state", f"Pool {name} State", state,
+            unit=None, device_class=None, state_class=None, icon="mdi:database",
+        ))
+    return readings
+
+
 # ---- GPU ------------------------------------------------------------------ #
 
 def read_gpu() -> list[Reading]:
@@ -948,7 +985,8 @@ class Publisher:
     def publish(self, readings: list[Reading]):
         for reading in readings:
             self.announce(reading)
-        state = {r.key: round(r.value, 1) for r in readings}
+        state = {r.key: (round(r.value, 1) if isinstance(r.value, (int, float)) else r.value)
+                 for r in readings}
         self.client.publish(self.state_topic, json.dumps(state), qos=0, retain=True)
         log.info("Published %d readings: %s", len(readings), state)
 
@@ -964,6 +1002,8 @@ def collect(cfg: dict) -> list[Reading]:
     if cfg["disks"]["enabled"]:
         readings += read_disks(cfg["disks"].get("skip_standby", True),
                                cfg.get("smart"), cfg.get("spindown"))
+    if cfg["zfs"]["enabled"]:
+        readings += read_zfs_pools()
     if cfg["gpu"]["enabled"]:
         readings += read_gpu()
     if cfg["system"]["enabled"]:
@@ -993,8 +1033,10 @@ def _print_readings(node: str, readings: list[Reading]):
     width = max(len(r.name) for r in readings)
     for r in readings:
         unit = f" {r.unit}" if r.unit else ""
-        print(f"  {r.name:<{width}}  {r.value:>8.1f}{unit}   [{r.key}]")
-    state = {r.key: round(r.value, 1) for r in readings}
+        shown = f"{r.value:>8.1f}" if isinstance(r.value, (int, float)) else f"{r.value:>8}"
+        print(f"  {r.name:<{width}}  {shown}{unit}   [{r.key}]")
+    state = {r.key: (round(r.value, 1) if isinstance(r.value, (int, float)) else r.value)
+             for r in readings}
     print(f"\nState JSON that would be published:\n  {json.dumps(state)}")
 
 

@@ -42,6 +42,15 @@ spindown:                   # park idle drives (needs disks.enabled)
   # own. Real I/O is measured from /sys/block/<dev>/stat, which SMART's ioctl
   # passthrough does not touch. Once asleep, disks.skip_standby keeps it asleep.
 
+zfs:
+  enabled: true             # per-pool health from /proc/spl/kstat/zfs/<pool>/state
+  # Publishes pool_<name>_healthy (1/0) and pool_<name>_state (ONLINE/DEGRADED/...).
+  # This is the alert that matters on a NAS: a drive that disappears degrades its
+  # pool. It cannot be caught from the per-disk sensors — when a drive vanishes its
+  # keys simply stop being published, and Home Assistant IGNORES empty values for
+  # numeric sensors, so those entities keep showing their last reading forever
+  # rather than going unavailable.
+
 gpu:
   enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)
 

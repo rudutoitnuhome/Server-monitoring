@@ -21,6 +21,11 @@
 #     7GJ310BK, 7PK6P6GC, 7PK85E1G, 7PKAW5HG, ZRT0L58H0000W3257EXA, ZRT0L5F80000W3257EK1, ZRT0L60A0000W325RR1P, ZRT0L66Z0000W324NTT8
 #   4x 28TB + 2x 4TB SATA:
 #     WCK44PKZ, WCK474Q3, ZXA0KSS6, ZXA0LAEB, ZXA0M067, ZXA0PF3D
+# Alert 3 watches ZFS pool health, which is the ONLY reliable way to catch a
+# drive that vanishes outright: when a drive disappears its keys stop being
+# published, and Home Assistant ignores empty values for numeric sensors, so the
+# per-disk entities keep showing their last reading forever instead of going
+# unavailable. A missing drive degrades its pool, and that is unambiguous.
 # SAS drives report a grown-defect count instead of ATA sector attributes.
 # Their *_selftest_ok sensors currently read 0 on every drive (under
 # investigation) and are deliberately NOT alerted on yet.
@@ -122,3 +127,27 @@
           Grown defects / reallocated / pending sectors mean failing media - scrub
           the pool and plan a replacement. UDMA CRC errors instead mean a cable or
           link fault: reseat or replace that drive's cable.
+
+- id: truenasty_zfs_pool_unhealthy
+  alias: "TrueNasty: ZFS pool not healthy"
+  description: >-
+    A pool left the ONLINE state - a drive faulted, vanished, or the pool is
+    resilvering/degraded. This is what catches a disk that disappears outright,
+    which the per-disk sensors cannot.
+  mode: single
+  trigger:
+    - platform: numeric_state
+      below: 1
+      entity_id:
+        - sensor.truenasty_pool_backup_healthy
+        - sensor.truenasty_pool_boot_pool_healthy
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "\U0001F534 TrueNAS pool is not ONLINE"
+        message: >-
+          {{ trigger.to_state.attributes.friendly_name }} reports
+          {{ states(trigger.entity_id | replace('_healthy', '_state')) }}.
+          Run `zpool status -v` on the NAS: a drive has faulted or gone missing.
+          The pool keeps serving data while degraded, but it has lost redundancy -
+          replace the faulted drive before a second one goes.

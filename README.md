@@ -13,6 +13,7 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 | Disk temps | `smartctl` (smartmontools) | One entity per drive (SATA, SAS, NVMe). Skips drives in **standby** so it won't wake sleeping disks. |
 | Disk spindown | `smartctl` (smartmontools) | Optional: issues STANDBY to drives with no real I/O for `after_minutes` (default off; opt in per serial). Needed because SMART polling resets a drive's own idle timer, so `hdparm -S` / TrueNAS `hddstandby` alone may never park a monitored disk. |
 | Disk SMART health | `smartctl` (smartmontools) | Per drive: overall pass/fail (1/0), reallocated / pending / uncorrectable sectors, CRC errors (NVMe: wear %, spare %, media errors), last self-test verdict — and launches a recurring **short self-test** (configurable via the `smart` block). |
+| ZFS pool health | `/proc/spl/kstat/zfs/<pool>/state` | Per pool: `healthy` (1/0) + the state string (ONLINE / DEGRADED / …). Read from the kernel, so it needs no root and no `zpool` binary in the container. **This is the only reliable "a drive vanished" alert** — see the note below. |
 | GPU temps | `nvidia-smi` | One entity per NVIDIA GPU. Silently skipped when no GPU/driver is present. |
 | CPU usage % | `/proc/stat` | Utilisation averaged over the polling interval. |
 | IO wait % | `/proc/stat` | Share of CPU time spent waiting on I/O. |
@@ -22,6 +23,13 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 | Network throughput | `/proc/net/dev` | Per-interface in/out in Mbit/s (rate over the interval). |
 | Link speed | `/sys/class/net/*/speed` | Negotiated interface speed (Mbit/s). |
 | Filesystem usage | `os.statvfs` | Used % + free GB per configured mountpoint. |
+
+> **Why pool health, and not a "disk sensor went unavailable" alert?** When a
+> drive disappears, its keys simply stop appearing in the state JSON. Home
+> Assistant *ignores* empty values for numeric sensors, so `disk_<serial>_temp`
+> and friends keep displaying their last reading indefinitely — they never go
+> `unavailable` or `unknown`, and no threshold alert can fire. The pool health
+> sensor is unambiguous: a missing drive degrades its pool.
 
 System/network/filesystem metrics come from the kernel's `/proc` and `/sys`
 (no extra dependencies), toggled by the `system`, `network` and `filesystems`
