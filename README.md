@@ -15,6 +15,7 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 | Disk SMART health | `smartctl` (smartmontools) | Per drive: overall pass/fail (1/0), reallocated / pending / uncorrectable sectors, CRC errors (NVMe: wear %, spare %, media errors), last self-test verdict — and launches a recurring **short self-test** (configurable via the `smart` block). |
 | ZFS pool health | `/proc/spl/kstat/zfs/<pool>/state` | Per pool: `healthy` (1/0) + the state string (ONLINE / DEGRADED / …). Read from the kernel, so it needs no root and no `zpool` binary in the container. **This is the only reliable "a drive vanished" alert** — see the note below. |
 | GPU temps | `nvidia-smi` | One entity per NVIDIA GPU. Silently skipped when no GPU/driver is present. |
+| Intel/AMD GPU temp + power | `/sys/class/drm/card*/device/hwmon/` | Temperature, and power draw derived from the `energy1_input` counter, for cards under `i915` / `xe` / `amdgpu`. Needs no tools — **`intel_gpu_top` cannot be installed on a TrueNAS appliance** (`apt` disabled, immutable root) and isn't needed, since the driver exports these directly. Works in the container because `/sys` is already mounted. |
 | CPU usage % | `/proc/stat` | Utilisation averaged over the polling interval. |
 | IO wait % | `/proc/stat` | Share of CPU time spent waiting on I/O. |
 | Memory used | `/proc/meminfo` | Used %, plus used/total in GB. |

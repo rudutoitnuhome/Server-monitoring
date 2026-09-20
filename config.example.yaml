@@ -52,7 +52,9 @@ zfs:
   # rather than going unavailable.
 
 gpu:
-  enabled: true             # NVIDIA GPUs via nvidia-smi (ignored if none present)
+  enabled: true             # NVIDIA GPUs via nvidia-smi, plus Intel/AMD GPU temperature
+                            # and power read from /sys/class/drm/card*/device/hwmon
+                            # (i915 / xe / amdgpu). Both are skipped when absent.
 
 system:
   enabled: true             # CPU usage %, IO wait %, memory (% + GB), load avg (1/5/15m), uptime

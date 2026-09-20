@@ -643,6 +643,61 @@ def read_zfs_pools() -> list[Reading]:
 # ---- GPU ------------------------------------------------------------------ #
 
 def read_gpu() -> list[Reading]:
+    """GPU temperatures: NVIDIA via nvidia-smi, Intel/AMD via the DRM hwmon node."""
+    return _read_nvidia_gpu() + _read_drm_hwmon_gpus()
+
+
+# Previous GPU energy counters, for deriving power draw: path -> (microjoules, monotonic)
+_prev_gpu_energy: dict[str, tuple[int, float]] = {}
+
+
+def _read_drm_hwmon_gpus() -> list[Reading]:
+    """Temperature (and power, if exported) from a DRM card's hwmon node.
+
+    Covers Intel discrete/integrated GPUs under i915 or xe. Deliberately reads
+    sysfs rather than shelling out to intel_gpu_top: that package cannot be
+    installed on a TrueNAS appliance (apt is disabled, root is immutable) and is
+    not needed, since the driver exports these values directly. /sys is already
+    mounted in the container, so this works there too.
+    """
+    base = "/sys/class/drm"
+    if not os.path.isdir(base):
+        return []
+    readings: list[Reading] = []
+    for card in sorted(os.listdir(base)):
+        if not re.fullmatch(r"card\d+", card):
+            continue
+        hwmon_dir = os.path.join(base, card, "device", "hwmon")
+        if not os.path.isdir(hwmon_dir):
+            continue
+        for entry in sorted(os.listdir(hwmon_dir)):
+            path = os.path.join(hwmon_dir, entry)
+            driver = _read_text(os.path.join(path, "name"))
+            if driver not in ("i915", "xe", "amdgpu"):
+                continue
+            label = f"GPU {card} ({driver})"
+
+            raw = _read_text(os.path.join(path, "temp1_input"))
+            if raw and raw.lstrip("-").isdigit():
+                readings.append(Reading(
+                    f"gpu_{card}_temp", f"{label} Temperature", int(raw) / 1000.0))
+
+            # energy1_input is a monotonic microjoule counter; the delta between
+            # cycles gives average power draw over the interval.
+            raw = _read_text(os.path.join(path, "energy1_input"))
+            if raw and raw.isdigit():
+                now, micro = time.monotonic(), int(raw)
+                previous = _prev_gpu_energy.get(path)
+                _prev_gpu_energy[path] = (micro, now)
+                if previous and now > previous[1] and micro >= previous[0]:
+                    watts = (micro - previous[0]) / 1e6 / (now - previous[1])
+                    readings.append(Reading(
+                        f"gpu_{card}_power", f"{label} Power", round(watts, 1),
+                        unit="W", device_class="power", icon="mdi:flash"))
+    return readings
+
+
+def _read_nvidia_gpu() -> list[Reading]:
     """Read NVIDIA GPU temperatures via nvidia-smi."""
     if not shutil.which("nvidia-smi"):
         return []
