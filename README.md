@@ -32,6 +32,16 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 > `unavailable` or `unknown`, and no threshold alert can fire. The pool health
 > sensor is unambiguous: a missing drive degrades its pool.
 
+> **Match drives by pattern, never by name.** The health alert in
+> `homeassistant/smart-alerts.yaml` uses a *template* trigger over every
+> `*_disk_*_(smart_ok|selftest_ok)` entity, so a drive installed later is covered
+> the moment its sensors appear. This is not a style preference: a replacement
+> 4TB was publishing `selftest_ok = 0` with 2443 pending sectors while the
+> dashboard showed everything green, solely because the automation's hand-written
+> entity list predated the drive. The `Servers Failing Disks` template sensor in
+> `homeassistant/template-sensors.yaml` does the same for dashboards — one card
+> that stays correct across disk swaps.
+
 System/network/filesystem metrics come from the kernel's `/proc` and `/sys`
 (no extra dependencies), toggled by the `system`, `network` and `filesystems`
 config blocks. Network excludes virtual interfaces (loopback, docker, veth,

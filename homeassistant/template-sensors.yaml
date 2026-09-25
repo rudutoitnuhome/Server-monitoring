@@ -151,3 +151,24 @@ template:
               {% endif %}
             {% endfor %}
             {{ ns.name }}
+
+      # Failing-drive count across EVERY server-monitor host (matched by
+      # pattern, so drives added later are counted without editing anything).
+      # Put this one number on the dashboard: it stays correct when disks are
+      # swapped, which a hand-listed card does not. The `failing_drives`
+      # attribute names them.
+      - name: Servers Failing Disks
+        unique_id: servers_failing_disks
+        state_class: measurement
+        icon: mdi:harddisk-remove
+        state: >
+          {{ states.sensor
+             | selectattr('entity_id', 'search', '_disk_.*_(smart_ok|selftest_ok)$')
+             | selectattr('state', 'in', ['0', '0.0'])
+             | list | count }}
+        attributes:
+          failing_drives: >
+            {{ states.sensor
+               | selectattr('entity_id', 'search', '_disk_.*_(smart_ok|selftest_ok)$')
+               | selectattr('state', 'in', ['0', '0.0'])
+               | map(attribute='name') | list | join(', ') or 'none' }}

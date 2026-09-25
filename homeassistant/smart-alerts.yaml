@@ -1,13 +1,28 @@
 # SMART disk alerts for the TrueNasty (192.168.4.111) server-monitor sensors.
 #
-# Two automations:
-#   1. SMART health FAILED       -> a drive reports itself as failing: act now
-#   2. Error counters INCREASING -> new bad sectors / defects / link errors
+# Three automations:
+#   1. Drive reports FAILURE      -> SMART health or a self-test failed: act now
+#   2. Error counters INCREASING  -> new bad sectors / defects / link errors
+#   3. ZFS pool not healthy       -> a drive faulted or vanished
 #
-# Alert 2 triggers on any *increase* rather than crossing a fixed number, so it
-# needs no per-drive baselines, never false-fires on a used drive's existing
-# lifetime counts (e.g. ZXA0LAEB sits at 49 UDMA CRC errors from the Aug 2026
-# cable fault), and keeps working when drives are swapped.
+# Alert 1 matches entities BY PATTERN, not by name, so a drive added to the box
+# is covered the moment its sensors appear. This matters: on 2026-09-25 a
+# replacement 4TB (WD-WX62D215AJHF) was publishing selftest_ok = 0 with 2443
+# pending sectors while the dashboard looked clean, purely because the drive was
+# installed after the alert's entity list was written. Never hand-list drives
+# for a health verdict again.
+#
+# Alert 2 still needs explicit entities (Home Assistant state triggers cannot
+# take a pattern) and triggers on any *increase* rather than crossing a fixed
+# number, so it needs no per-drive baselines and never false-fires on a used
+# drive's existing lifetime counts. Regenerate its list when drives change --
+# alert 1 is the safety net that catches anything missed here.
+#
+# Alert 3 watches ZFS pool health, which is the ONLY reliable way to catch a
+# drive that vanishes outright: when a drive disappears its keys stop being
+# published, and Home Assistant ignores empty values for numeric sensors, so the
+# per-disk entities keep showing their last reading forever instead of going
+# unavailable. A missing drive degrades its pool, and that is unambiguous.
 #
 # To install: Settings -> Automations & Scenes -> Create Automation ->
 # "Start with an empty automation" -> three-dot menu -> Edit in YAML -> paste
@@ -16,58 +31,45 @@
 #   - service: notify.mobile_app_<your_phone>
 #     data: {title: "{{ title }}", message: "{{ message }}"}
 #
-# Drives covered (14 total):
+# Drives in the box as of 2026-09-25 (10 total):
 #   8x 10TB SAS (backup pool - currently the ONLY copy of the data):
-#     7GJ310BK, 7PK6P6GC, 7PK85E1G, 7PKAW5HG, ZRT0L58H0000W3257EXA, ZRT0L5F80000W3257EK1, ZRT0L60A0000W325RR1P, ZRT0L66Z0000W324NTT8
-#   4x 28TB + 2x 4TB SATA:
-#     WCK44PKZ, WCK474Q3, ZXA0KSS6, ZXA0LAEB, ZXA0M067, ZXA0PF3D
-# Alert 3 watches ZFS pool health, which is the ONLY reliable way to catch a
-# drive that vanishes outright: when a drive disappears its keys stop being
-# published, and Home Assistant ignores empty values for numeric sensors, so the
-# per-disk entities keep showing their last reading forever instead of going
-# unavailable. A missing drive degrades its pool, and that is unambiguous.
-# SAS drives report a grown-defect count instead of ATA sector attributes.
-# Their *_selftest_ok sensors currently read 0 on every drive (under
-# investigation) and are deliberately NOT alerted on yet.
-# Regenerate these lists when drives change.
+#     7GJ310BK, 7PK6P6GC, 7PK85E1G, 7PKAW5HG, ZRT0L58H0000W3257EXA,
+#     ZRT0L5F80000W3257EK1, ZRT0L60A0000W325RR1P, ZRT0L66Z0000W324NTT8
+#   2x 4TB SATA (boot pool): WCK44PKZ, WD-WX62D215AJHF
+#   SAS drives report a grown-defect count instead of ATA sector attributes.
 
 - id: truenasty_smart_health_failed
-  alias: "TrueNasty: disk SMART health FAILED"
+  alias: "TrueNasty: disk SMART health or self-test FAILED"
   description: >-
-    A drive's own firmware reports failure. SMART failure predictions are
-    usually terminal - replace the drive promptly.
+    Any drive whose firmware reports failure, or whose last self-test failed.
+    Matches every disk_*_smart_ok / disk_*_selftest_ok sensor by pattern, so
+    newly installed drives are covered automatically.
   mode: single
   trigger:
-    - platform: numeric_state
-      below: 1
-      entity_id:
-        - sensor.truenasty_disk_7gj310bk_smart_ok
-        - sensor.truenasty_disk_7pk6p6gc_smart_ok
-        - sensor.truenasty_disk_7pk85e1g_smart_ok
-        - sensor.truenasty_disk_7pkaw5hg_smart_ok
-        - sensor.truenasty_disk_wck44pkz_smart_ok
-        - sensor.truenasty_disk_wck474q3_smart_ok
-        - sensor.truenasty_disk_zrt0l58h0000w3257exa_smart_ok
-        - sensor.truenasty_disk_zrt0l5f80000w3257ek1_smart_ok
-        - sensor.truenasty_disk_zrt0l60a0000w325rr1p_smart_ok
-        - sensor.truenasty_disk_zrt0l66z0000w324ntt8_smart_ok
-        - sensor.truenasty_disk_zxa0kss6_smart_ok
-        - sensor.truenasty_disk_zxa0laeb_smart_ok
-        - sensor.truenasty_disk_zxa0m067_smart_ok
-        - sensor.truenasty_disk_zxa0pf3d_smart_ok
-        - sensor.truenasty_disk_wck44pkz_selftest_ok
-        - sensor.truenasty_disk_wck474q3_selftest_ok
-        - sensor.truenasty_disk_zxa0kss6_selftest_ok
-        - sensor.truenasty_disk_zxa0laeb_selftest_ok
-        - sensor.truenasty_disk_zxa0m067_selftest_ok
-        - sensor.truenasty_disk_zxa0pf3d_selftest_ok
+    - platform: template
+      value_template: >-
+        {{ states.sensor
+           | selectattr('entity_id', 'search',
+                        '^sensor\.truenasty_disk_.*_(smart_ok|selftest_ok)$')
+           | selectattr('state', 'in', ['0', '0.0'])
+           | list | count > 0 }}
   action:
+    - variables:
+        failing: >-
+          {{ states.sensor
+             | selectattr('entity_id', 'search',
+                          '^sensor\.truenasty_disk_.*_(smart_ok|selftest_ok)$')
+             | selectattr('state', 'in', ['0', '0.0'])
+             | map(attribute='name') | list | join(', ') }}
     - service: persistent_notification.create
       data:
         title: "🔴 TrueNAS drive reports FAILURE"
         message: >-
-          {{ trigger.to_state.attributes.friendly_name }} = {{ trigger.to_state.state }}.
-          Check `zpool status` and replace this drive as soon as possible.
+          Failing: {{ failing }}.
+          A SMART health failure is usually terminal; a failed self-test means
+          the drive could not read part of its own surface. Check `zpool status`
+          and replace the drive. If it is a boot-pool member, do not resilver
+          onto it.
 
 - id: truenasty_smart_counters_rising
   alias: "TrueNasty: disk error counters increasing"
@@ -78,38 +80,24 @@
   trigger:
     - platform: state
       entity_id:
+        # 8x 10TB SAS - grown defect list (the reallocated-sector equivalent)
         - sensor.truenasty_disk_7gj310bk_defects
         - sensor.truenasty_disk_7pk6p6gc_defects
         - sensor.truenasty_disk_7pk85e1g_defects
         - sensor.truenasty_disk_7pkaw5hg_defects
-        - sensor.truenasty_disk_wck44pkz_crc_err
-        - sensor.truenasty_disk_wck44pkz_pending
-        - sensor.truenasty_disk_wck44pkz_realloc
-        - sensor.truenasty_disk_wck44pkz_uncorrect
-        - sensor.truenasty_disk_wck474q3_crc_err
-        - sensor.truenasty_disk_wck474q3_pending
-        - sensor.truenasty_disk_wck474q3_realloc
-        - sensor.truenasty_disk_wck474q3_uncorrect
         - sensor.truenasty_disk_zrt0l58h0000w3257exa_defects
         - sensor.truenasty_disk_zrt0l5f80000w3257ek1_defects
         - sensor.truenasty_disk_zrt0l60a0000w325rr1p_defects
         - sensor.truenasty_disk_zrt0l66z0000w324ntt8_defects
-        - sensor.truenasty_disk_zxa0kss6_crc_err
-        - sensor.truenasty_disk_zxa0kss6_pending
-        - sensor.truenasty_disk_zxa0kss6_realloc
-        - sensor.truenasty_disk_zxa0kss6_uncorrect
-        - sensor.truenasty_disk_zxa0laeb_crc_err
-        - sensor.truenasty_disk_zxa0laeb_pending
-        - sensor.truenasty_disk_zxa0laeb_realloc
-        - sensor.truenasty_disk_zxa0laeb_uncorrect
-        - sensor.truenasty_disk_zxa0m067_crc_err
-        - sensor.truenasty_disk_zxa0m067_pending
-        - sensor.truenasty_disk_zxa0m067_realloc
-        - sensor.truenasty_disk_zxa0m067_uncorrect
-        - sensor.truenasty_disk_zxa0pf3d_crc_err
-        - sensor.truenasty_disk_zxa0pf3d_pending
-        - sensor.truenasty_disk_zxa0pf3d_realloc
-        - sensor.truenasty_disk_zxa0pf3d_uncorrect
+        # 2x 4TB SATA boot drives - ATA attributes
+        - sensor.truenasty_disk_wck44pkz_crc_err
+        - sensor.truenasty_disk_wck44pkz_pending
+        - sensor.truenasty_disk_wck44pkz_realloc
+        - sensor.truenasty_disk_wck44pkz_uncorrect
+        - sensor.truenasty_disk_wd_wx62d215ajhf_crc_err
+        - sensor.truenasty_disk_wd_wx62d215ajhf_pending
+        - sensor.truenasty_disk_wd_wx62d215ajhf_realloc
+        - sensor.truenasty_disk_wd_wx62d215ajhf_uncorrect
   condition:
     - condition: template
       value_template: >-
