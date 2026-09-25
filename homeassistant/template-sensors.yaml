@@ -1,8 +1,16 @@
-# Template sensors: hottest disk per server.
+# Template sensors: hottest disk per server, plus a failing-drive count.
 #
-# Each sensor reports the maximum temperature across that server's disk sensors,
-# matched by entity_id prefix so new disks are picked up automatically. The
-# `hottest_drive` attribute names the drive currently running hottest.
+# Reconciled against PRODUCTION on 2026-09-25 (homeassistant.local, HA 2026.9.3).
+# The repo copy had drifted behind the live config: it still defined
+# Plex-Luthor and Moxxy-Proxxy hottest-disk sensors (both retired in August) and
+# was missing New-5080. Anything here that disagrees with production is a bug —
+# check before pasting over a running config.
+#
+# Each hottest-disk sensor reports the maximum temperature across that server's
+# disk sensors, matched by entity_id pattern so new disks are picked up
+# automatically, with the `hottest_drive` attribute naming the current hottest.
+# The `availability` template is what stops a sensor reading 0 when a host is
+# off — keep it.
 #
 # Add this to configuration.yaml. If you already have a top-level `template:`
 # key, merge these list items under it (don't create a second `template:`).
@@ -10,8 +18,8 @@
 
 template:
   - sensor:
-      - name: Plex-Luthor Hottest Disk
-        unique_id: plex_luthor_hottest_disk
+      - name: New-5080 Hottest Disk
+        unique_id: new_5080_hottest_disk
         device_class: temperature
         unit_of_measurement: "°C"
         state_class: measurement
@@ -19,14 +27,14 @@ template:
           {{ states.sensor
              | selectattr('attributes.device_class', 'defined')
              | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+             | selectattr('entity_id', 'search', '^sensor\.new_5080_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | list | count > 0 }}
         state: >
           {% set temps = states.sensor
              | selectattr('attributes.device_class', 'defined')
              | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+             | selectattr('entity_id', 'search', '^sensor\.new_5080_disk_')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | map(attribute='state') | map('float', 0) | list %}
           {{ max(temps) | round(1) if temps else none }}
@@ -35,8 +43,8 @@ template:
             {% set ns = namespace(name=none, temp=-273) %}
             {% for s in states.sensor
                | selectattr('attributes.device_class', 'defined')
-             | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.plex_luthor_disk_')
+               | selectattr('attributes.device_class', 'eq', 'temperature')
+               | selectattr('entity_id', 'search', '^sensor\.new_5080_disk_')
                | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
               {% if s.state | float(0) > ns.temp %}
                 {% set ns.temp = s.state | float(0) %}
@@ -45,41 +53,14 @@ template:
             {% endfor %}
             {{ ns.name }}
 
-      - name: Moxxy-Proxxy Hottest Disk
-        unique_id: moxxy_proxxy_hottest_disk
-        device_class: temperature
-        unit_of_measurement: "°C"
-        state_class: measurement
-        availability: >
-          {{ states.sensor
-             | selectattr('attributes.device_class', 'defined')
-             | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
-             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
-             | list | count > 0 }}
-        state: >
-          {% set temps = states.sensor
-             | selectattr('attributes.device_class', 'defined')
-             | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
-             | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
-             | map(attribute='state') | map('float', 0) | list %}
-          {{ max(temps) | round(1) if temps else none }}
-        attributes:
-          hottest_drive: >
-            {% set ns = namespace(name=none, temp=-273) %}
-            {% for s in states.sensor
-               | selectattr('attributes.device_class', 'defined')
-             | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.moxxy_proxxy_disk_')
-               | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
-              {% if s.state | float(0) > ns.temp %}
-                {% set ns.temp = s.state | float(0) %}
-                {% set ns.name = s.name %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.name }}
-
+      # NOTE on the `_temp$` anchor: it was added when TrueNAS still had NVMe
+      # disk entities, to keep a hot boot NVMe out of the "hottest disk" figure.
+      # It no longer excludes anything — after the 2026-09-25 entity rename every
+      # disk temperature entity is sensor.truenasty_disk_<serial>_temp, including
+      # the two 4TB boot drives, and the NVMe entities were purged. Keep the
+      # anchor (it correctly rejects the smart_ok / pending / defects entities);
+      # just don't read it as an exclusion. To genuinely exclude a drive now, add
+      # a rejectattr on its serial.
       - name: TrueNasty Hottest Disk
         unique_id: truenasty_hottest_disk
         device_class: temperature
@@ -89,14 +70,14 @@ template:
           {{ states.sensor
              | selectattr('attributes.device_class', 'defined')
              | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_.*_temp$')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | list | count > 0 }}
         state: >
           {% set temps = states.sensor
              | selectattr('attributes.device_class', 'defined')
              | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_.*_temp$')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | map(attribute='state') | map('float', 0) | list %}
           {{ max(temps) | round(1) if temps else none }}
@@ -105,8 +86,8 @@ template:
             {% set ns = namespace(name=none, temp=-273) %}
             {% for s in states.sensor
                | selectattr('attributes.device_class', 'defined')
-             | selectattr('attributes.device_class', 'eq', 'temperature')
-             | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_')
+               | selectattr('attributes.device_class', 'eq', 'temperature')
+               | selectattr('entity_id', 'search', '^sensor\.truenasty_disk_.*_temp$')
                | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
               {% if s.state | float(0) > ns.temp %}
                 {% set ns.temp = s.state | float(0) %}
@@ -116,7 +97,9 @@ template:
             {{ ns.name }}
 
       # Hottest disk across ALL servers (matches every *_disk_* temperature
-      # sensor, so new hosts/disks are included automatically).
+      # sensor, so new hosts/disks are included automatically). The
+      # truenasty_disk_nvme reject is inert since those entities were purged;
+      # kept as a marker of intent should an NVMe boot drive reappear.
       - name: Servers Hottest Disk
         unique_id: servers_hottest_disk
         device_class: temperature
@@ -127,6 +110,7 @@ template:
              | selectattr('attributes.device_class', 'defined')
              | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '_disk_')
+             | rejectattr('entity_id', 'search', 'truenasty_disk_nvme')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | list | count > 0 }}
         state: >
@@ -134,6 +118,7 @@ template:
              | selectattr('attributes.device_class', 'defined')
              | selectattr('attributes.device_class', 'eq', 'temperature')
              | selectattr('entity_id', 'search', '_disk_')
+             | rejectattr('entity_id', 'search', 'truenasty_disk_nvme')
              | rejectattr('state', 'in', ['unknown', 'unavailable', 'none'])
              | map(attribute='state') | map('float', 0) | list %}
           {{ max(temps) | round(1) if temps else none }}
@@ -144,6 +129,7 @@ template:
                | selectattr('attributes.device_class', 'defined')
                | selectattr('attributes.device_class', 'eq', 'temperature')
                | selectattr('entity_id', 'search', '_disk_')
+               | rejectattr('entity_id', 'search', 'truenasty_disk_nvme')
                | rejectattr('state', 'in', ['unknown', 'unavailable', 'none']) %}
               {% if s.state | float(0) > ns.temp %}
                 {% set ns.temp = s.state | float(0) %}
@@ -157,6 +143,11 @@ template:
       # Put this one number on the dashboard: it stays correct when disks are
       # swapped, which a hand-listed card does not. The `failing_drives`
       # attribute names them.
+      #
+      # The regex tolerates both id shapes on purpose: TrueNasty's entities were
+      # renamed to key-shaped ids (..._selftest_ok) on 2026-09-25, while the
+      # other hosts still carry the old friendly-name slugs (..._self_test_ok,
+      # some with a _2 suffix). Live value at reconcile: 1 — the failing WD.
       - name: Servers Failing Disks
         unique_id: servers_failing_disks
         state_class: measurement
