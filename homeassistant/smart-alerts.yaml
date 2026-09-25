@@ -6,26 +6,30 @@
 #   3. ZFS pool not healthy       -> a drive faulted or vanished
 #
 # ---------------------------------------------------------------------------
-# READ THIS BEFORE EDITING ENTITY IDS. Verified against the live state machine
-# on 2026-09-25, and every assumption below had been wrong until then:
+# READ THIS BEFORE EDITING ENTITY IDS. Two things were found wrong on
+# 2026-09-25, and both are fixed here:
 #
 #   * These automations had never been installed in Home Assistant at all. An
 #     audit of every automation config found zero references to truenasty,
-#     smart_ok, selftest or pool_. Writing the YAML is not installing it.
-#   * Entity ids are NOT sensor.truenasty_disk_<serial>_<key>. Older entities
-#     were registered before the discovery payload pinned object_id, so their
-#     ids were welded from the friendly name at first discovery:
-#     sensor.truenasty_disk_sdb_smart_ok, plus a _2 suffix where the letter
-#     collided.
-#   * That letter is the one the kernel used when the entity was FIRST seen and
-#     never updates. Serial 7PK6P6GC is physically /dev/sdd today, and answers
-#     to sensor.truenasty_disk_sda_smart_ok_2. Do not infer a drive from its
-#     entity id; map through unique_id (server_monitor_truenasty_<key>) instead.
+#     smart_ok, selftest or pool_. Writing the YAML is not installing it — after
+#     pasting, confirm with Developer Tools -> Template:
+#       {{ states.automation | map(attribute='name') | list }}
+#   * Entity ids did not match the keys. Entities registered before the
+#     discovery payload pinned object_id had ids welded from the friendly name
+#     at first discovery (sensor.truenasty_disk_sdb_smart_ok, _2 on collision),
+#     and that drive letter never updated: serial 7PK6P6GC was /dev/sdd while
+#     still answering to ..._sda_smart_ok_2.
 #
-# Alert 1 therefore matches by PATTERN over both id shapes, so it covers the
-# welded legacy ids, the key-shaped ids new entities now get, and any drive
-# added later. Alert 2 needs explicit ids (HA state triggers take no patterns) —
-# the list below is the verified mapping, and alert 1 is the net beneath it.
+# All 70 live TrueNasty entities were renamed to sensor.truenasty_<key> on
+# 2026-09-25 (keyed by unique_id server_monitor_truenasty_<key>; recorder
+# statistics followed the rename, so history is intact). The ids below are that
+# shape. Note the self-test slug is now `selftest_ok` — the KEY — not the old
+# friendly-name slug `self_test_ok`.
+#
+# Alert 1 still matches by PATTERN, tolerant of both shapes, because other hosts
+# (new_5080, annefrank, v100...) have NOT been renamed and still carry
+# friendly-name slugs. Alert 2 needs explicit ids (HA state triggers take no
+# patterns); alert 1 is the net beneath it.
 #
 # To install: Settings -> Automations & Scenes -> Create Automation ->
 # "Start with an empty automation" -> three-dot menu -> Edit in YAML -> paste
@@ -80,28 +84,25 @@
   trigger:
     - platform: state
       entity_id:
-        # 8x 10TB SAS - grown defect list (the reallocated-sector equivalent).
-        # Comment gives the real drive; the sdX in the id is meaningless.
-        - sensor.truenasty_disk_sda_grown_defects   # 7PK6P6GC
-        - sensor.truenasty_disk_sdb_grown_defects   # 7GJ310BK
-        - sensor.truenasty_disk_sde_grown_defects   # ZRT0L5F80000W3257EK1
-        - sensor.truenasty_disk_sdf_grown_defects   # 7PKAW5HG
-        - sensor.truenasty_disk_sdh_grown_defects   # ZRT0L66Z0000W324NTT8
-        - sensor.truenasty_disk_sdj_grown_defects   # ZRT0L60A0000W325RR1P
-        - sensor.truenasty_disk_sdk_grown_defects   # ZRT0L58H0000W3257EXA
-        - sensor.truenasty_disk_sdl_grown_defects   # 7PK85E1G
+        # 8x 10TB SAS - grown defect list (the reallocated-sector equivalent)
+        - sensor.truenasty_disk_7gj310bk_defects
+        - sensor.truenasty_disk_7pk6p6gc_defects
+        - sensor.truenasty_disk_7pk85e1g_defects
+        - sensor.truenasty_disk_7pkaw5hg_defects
+        - sensor.truenasty_disk_zrt0l58h0000w3257exa_defects
+        - sensor.truenasty_disk_zrt0l5f80000w3257ek1_defects
+        - sensor.truenasty_disk_zrt0l60a0000w325rr1p_defects
+        - sensor.truenasty_disk_zrt0l66z0000w324ntt8_defects
         # 4TB SATA boot drive WCK44PKZ - ATA attributes
-        - sensor.truenasty_disk_sdm_crc_errors
-        - sensor.truenasty_disk_sdm_pending_sectors
-        - sensor.truenasty_disk_sdm_reallocated_sectors
-        - sensor.truenasty_disk_sdm_uncorrectable_sectors
-        # 4TB SATA WD-WX62D215AJHF - the failing replacement drive.
-        # NOTE: its counter ids share the sdj letter with ZRT0L60A's defects
-        # entity above. Different suffixes, different drives.
-        - sensor.truenasty_disk_sdj_crc_errors
-        - sensor.truenasty_disk_sdj_pending_sectors
-        - sensor.truenasty_disk_sdj_reallocated_sectors
-        - sensor.truenasty_disk_sdj_uncorrectable_sectors
+        - sensor.truenasty_disk_wck44pkz_crc_err
+        - sensor.truenasty_disk_wck44pkz_pending
+        - sensor.truenasty_disk_wck44pkz_realloc
+        - sensor.truenasty_disk_wck44pkz_uncorrect
+        # 4TB SATA WD-WX62D215AJHF - the failing replacement drive
+        - sensor.truenasty_disk_wd_wx62d215ajhf_crc_err
+        - sensor.truenasty_disk_wd_wx62d215ajhf_pending
+        - sensor.truenasty_disk_wd_wx62d215ajhf_realloc
+        - sensor.truenasty_disk_wd_wx62d215ajhf_uncorrect
   condition:
     - condition: template
       value_template: >-
