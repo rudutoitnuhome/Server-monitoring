@@ -32,15 +32,28 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 > `unavailable` or `unknown`, and no threshold alert can fire. The pool health
 > sensor is unambiguous: a missing drive degrades its pool.
 
-> **Match drives by pattern, never by name.** The health alert in
-> `homeassistant/smart-alerts.yaml` uses a *template* trigger over every
-> `*_disk_*_(smart_ok|selftest_ok)` entity, so a drive installed later is covered
-> the moment its sensors appear. This is not a style preference: a replacement
-> 4TB was publishing `selftest_ok = 0` with 2443 pending sectors while the
-> dashboard showed everything green, solely because the automation's hand-written
-> entity list predated the drive. The `Servers Failing Disks` template sensor in
-> `homeassistant/template-sensors.yaml` does the same for dashboards — one card
-> that stays correct across disk swaps.
+> **Match drives by pattern, and verify the automation exists.** The health
+> alert in `homeassistant/smart-alerts.yaml` uses a *template* trigger over every
+> `*_disk_*_(smart_ok|self_?test_ok)(_\d+)?` entity, so a drive installed later
+> is covered the moment its sensors appear. Two separate failures on 2026-09-25
+> forced this:
+>
+> 1. A replacement 4TB was publishing `selftest_ok = 0` with 2443 pending sectors
+>    while the dashboard showed green — and an audit of Home Assistant found the
+>    alert automations **had never been pasted in at all**. YAML in this repo is
+>    not an installed automation. After pasting, confirm with Developer Tools →
+>    Template: `{{ states.automation | map(attribute='name') | list }}`.
+> 2. The entity ids those automations used never existed either. Entities
+>    registered before the discovery payload pinned `object_id` got ids welded
+>    from the friendly name at first discovery — `sensor.truenasty_disk_sdb_smart_ok`,
+>    with a `_2` suffix on collision — and that drive letter never updates, so
+>    serial 7PK6P6GC answers to `..._sda_smart_ok_2` while the kernel calls it
+>    sdd. **Only `unique_id` (`server_monitor_<node>_<key>`) is stable**; resolve
+>    entity ids through it rather than guessing from the key.
+>
+> The `Servers Failing Disks` template sensor in
+> `homeassistant/template-sensors.yaml` applies the same pattern to dashboards —
+> one card that stays correct across disk swaps.
 
 System/network/filesystem metrics come from the kernel's `/proc` and `/sys`
 (no extra dependencies), toggled by the `system`, `network` and `filesystems`

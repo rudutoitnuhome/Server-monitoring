@@ -163,12 +163,12 @@ template:
         icon: mdi:harddisk-remove
         state: >
           {{ states.sensor
-             | selectattr('entity_id', 'search', '_disk_.*_(smart_ok|selftest_ok)$')
+             | selectattr('entity_id', 'search', '_disk_.*_(smart_ok|self_?test_ok)(_\d+)?$')
              | selectattr('state', 'in', ['0', '0.0'])
              | list | count }}
         attributes:
           failing_drives: >
             {{ states.sensor
-               | selectattr('entity_id', 'search', '_disk_.*_(smart_ok|selftest_ok)$')
+               | selectattr('entity_id', 'search', '_disk_.*_(smart_ok|self_?test_ok)(_\d+)?$')
                | selectattr('state', 'in', ['0', '0.0'])
                | map(attribute='name') | list | join(', ') or 'none' }}

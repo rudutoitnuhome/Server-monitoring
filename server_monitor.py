@@ -409,7 +409,12 @@ def _read_one_disk(
     model = data.get("model_name") or data.get("device", {}).get("name", "")
     short = os.path.basename(name)
     prefix = f"disk_{slugify(str(serial))}"
-    label = f"Disk {short} ({model})" if model else f"Disk {short}"
+    # Name every disk entity after its SERIAL, not its /dev letter. Letters are
+    # assigned in discovery order and shift whenever drives are added, removed or
+    # hotswapped: on the TrueNAS box the drive named "sdb" was physically sdd by
+    # the time anyone looked, and the serial is what you read off the label when
+    # you go to pull the right disk out of the chassis.
+    label = f"Disk {serial} ({model})" if model else f"Disk {serial}"
 
     readings: list[Reading] = []
     temp = data.get("temperature", {}).get("current")
@@ -417,7 +422,7 @@ def _read_one_disk(
         readings.append(Reading(f"{prefix}_temp", label, float(temp)))
 
     if want_smart:
-        readings += _smart_readings(data, prefix, short)
+        readings += _smart_readings(data, prefix, str(serial))
         _maybe_start_selftest(name, dev_type, data, smart_cfg)
     if spindown_cfg:
         _maybe_spindown(name, dev_type, str(serial), spindown_cfg)
@@ -482,14 +487,14 @@ def _maybe_spindown(name: str, dev_type: str, serial: str, cfg: dict):
     _disk_activity[dev] = (counters, now)
 
 
-def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
+def _smart_readings(data: dict, prefix: str, ident: str) -> list[Reading]:
     """SMART health flag + the attributes that predict drive failure."""
     out: list[Reading] = []
 
     passed = data.get("smart_status", {}).get("passed")
     if passed is not None:
         out.append(Reading(
-            f"{prefix}_smart_ok", f"Disk {short} SMART OK",
+            f"{prefix}_smart_ok", f"Disk {ident} SMART OK",
             1.0 if passed else 0.0, unit=None, device_class=None,
             state_class=None, icon="mdi:harddisk",
         ))
@@ -509,7 +514,7 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
         if isinstance(raw, (int, float)):
             key, attr_label = entry
             out.append(Reading(
-                f"{prefix}_{key}", f"Disk {short} {attr_label}", float(raw),
+                f"{prefix}_{key}", f"Disk {ident} {attr_label}", float(raw),
                 unit=None, device_class=None, icon="mdi:harddisk-plus",
             ))
 
@@ -520,7 +525,7 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
         st_passed = st_table[0].get("status", {}).get("passed")
         if st_passed is not None:
             out.append(Reading(
-                f"{prefix}_selftest_ok", f"Disk {short} Self-test OK",
+                f"{prefix}_selftest_ok", f"Disk {ident} Self-test OK",
                 1.0 if st_passed else 0.0, unit=None, device_class=None,
                 state_class=None, icon="mdi:harddisk-plus",
             ))
@@ -531,7 +536,7 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
     defects = data.get("scsi_grown_defect_list")
     if isinstance(defects, (int, float)):
         out.append(Reading(
-            f"{prefix}_defects", f"Disk {short} Grown Defects", float(defects),
+            f"{prefix}_defects", f"Disk {ident} Grown Defects", float(defects),
             unit=None, device_class=None, icon="mdi:harddisk-plus",
         ))
     counters = data.get("scsi_error_counter_log") or {}
@@ -539,7 +544,7 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
         value = (counters.get(op) or {}).get("total_uncorrected_errors")
         if isinstance(value, (int, float)):
             out.append(Reading(
-                f"{prefix}_{op}_uncorrect", f"Disk {short} Uncorrected {op.title()}s",
+                f"{prefix}_{op}_uncorrect", f"Disk {ident} Uncorrected {op.title()}s",
                 float(value), unit=None, device_class=None, icon="mdi:harddisk-plus",
             ))
     # SAS self-test log: entry 0 is the most recent; result value 0 == passed.
@@ -547,7 +552,7 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
     sas_result = (sas_test.get("result") or {}).get("value")
     if isinstance(sas_result, int):
         out.append(Reading(
-            f"{prefix}_selftest_ok", f"Disk {short} Self-test OK",
+            f"{prefix}_selftest_ok", f"Disk {ident} Self-test OK",
             1.0 if sas_result == 0 else 0.0, unit=None, device_class=None,
             state_class=None, icon="mdi:harddisk-plus",
         ))
@@ -563,7 +568,7 @@ def _smart_readings(data: dict, prefix: str, short: str) -> list[Reading]:
             value = nvme.get(src)
             if isinstance(value, (int, float)):
                 out.append(Reading(
-                    f"{prefix}_{key}", f"Disk {short} {attr_label}", float(value),
+                    f"{prefix}_{key}", f"Disk {ident} {attr_label}", float(value),
                     unit=unit, device_class=None, icon="mdi:harddisk-plus",
                 ))
     return out
@@ -623,6 +628,13 @@ def read_zfs_pools() -> list[Reading]:
         return []
     readings: list[Reading] = []
     for name in sorted(os.listdir(base)):
+        # `zpool import` (and middleware calls like pool.import_find) create
+        # transient kstat entries named import_<hex>_<pool> while they scan.
+        # They vanish seconds later, but each one publishes a discovery config
+        # first, leaving permanent ghost entities in Home Assistant whose state
+        # is empty forever.
+        if name.startswith("import_"):
+            continue
         state = _read_text(os.path.join(base, name, "state"))
         if not state:
             continue                      # not a pool directory
@@ -1014,11 +1026,19 @@ class Publisher:
         topic = f"{self.discovery_prefix}/sensor/{object_id}/config"
         payload = {
             "name": reading.name,
-            # object_id pins the entity_id to sensor.<node>_<key> (deterministic
-            # and collision-free across hosts); has_entity_name groups the
-            # friendly name under the device.
+            # object_id pins the entity_id to sensor.<node>_<key>: deterministic,
+            # collision-free across hosts, and the same string the alert YAML and
+            # dashboards in homeassistant/ are written against.
+            #
+            # has_entity_name is deliberately NOT set. With it, Home Assistant
+            # builds the entity_id from the device name plus the entity name and
+            # ignores object_id, which produced ids welded to the kernel's drive
+            # letter at first discovery: sensor.truenasty_disk_sdj_smart_ok, plus
+            # a _2 suffix when that letter was already taken. Those ids then
+            # outlive the letter — a drive discovered as sdj answers to sdj
+            # forever, even once the kernel calls it sdd — so nothing written
+            # against them can be trusted. Only unique_id stayed stable.
             "object_id": object_id,
-            "has_entity_name": True,
             "unique_id": f"server_monitor_{object_id}",
             "state_topic": self.state_topic,
             "availability_topic": self.avail_topic,

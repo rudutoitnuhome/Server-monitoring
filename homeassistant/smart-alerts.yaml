@@ -5,52 +5,52 @@
 #   2. Error counters INCREASING  -> new bad sectors / defects / link errors
 #   3. ZFS pool not healthy       -> a drive faulted or vanished
 #
-# Alert 1 matches entities BY PATTERN, not by name, so a drive added to the box
-# is covered the moment its sensors appear. This matters: on 2026-09-25 a
-# replacement 4TB (WD-WX62D215AJHF) was publishing selftest_ok = 0 with 2443
-# pending sectors while the dashboard looked clean, purely because the drive was
-# installed after the alert's entity list was written. Never hand-list drives
-# for a health verdict again.
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE EDITING ENTITY IDS. Verified against the live state machine
+# on 2026-09-25, and every assumption below had been wrong until then:
 #
-# Alert 2 still needs explicit entities (Home Assistant state triggers cannot
-# take a pattern) and triggers on any *increase* rather than crossing a fixed
-# number, so it needs no per-drive baselines and never false-fires on a used
-# drive's existing lifetime counts. Regenerate its list when drives change --
-# alert 1 is the safety net that catches anything missed here.
+#   * These automations had never been installed in Home Assistant at all. An
+#     audit of every automation config found zero references to truenasty,
+#     smart_ok, selftest or pool_. Writing the YAML is not installing it.
+#   * Entity ids are NOT sensor.truenasty_disk_<serial>_<key>. Older entities
+#     were registered before the discovery payload pinned object_id, so their
+#     ids were welded from the friendly name at first discovery:
+#     sensor.truenasty_disk_sdb_smart_ok, plus a _2 suffix where the letter
+#     collided.
+#   * That letter is the one the kernel used when the entity was FIRST seen and
+#     never updates. Serial 7PK6P6GC is physically /dev/sdd today, and answers
+#     to sensor.truenasty_disk_sda_smart_ok_2. Do not infer a drive from its
+#     entity id; map through unique_id (server_monitor_truenasty_<key>) instead.
 #
-# Alert 3 watches ZFS pool health, which is the ONLY reliable way to catch a
-# drive that vanishes outright: when a drive disappears its keys stop being
-# published, and Home Assistant ignores empty values for numeric sensors, so the
-# per-disk entities keep showing their last reading forever instead of going
-# unavailable. A missing drive degrades its pool, and that is unambiguous.
+# Alert 1 therefore matches by PATTERN over both id shapes, so it covers the
+# welded legacy ids, the key-shaped ids new entities now get, and any drive
+# added later. Alert 2 needs explicit ids (HA state triggers take no patterns) —
+# the list below is the verified mapping, and alert 1 is the net beneath it.
 #
 # To install: Settings -> Automations & Scenes -> Create Automation ->
 # "Start with an empty automation" -> three-dot menu -> Edit in YAML -> paste
-# one item (without its leading "- "). Notifications are persistent
-# notifications; to also push to your phone add, in the same actions list:
+# one item (without its leading "- ") -> Save. Repeat for each. Then confirm
+# they exist: Developer Tools -> Template ->
+#   {{ states.automation | map(attribute='name') | list }}
+# Notifications are persistent notifications; to also push to your phone add,
+# in the same actions list:
 #   - service: notify.mobile_app_<your_phone>
 #     data: {title: "{{ title }}", message: "{{ message }}"}
-#
-# Drives in the box as of 2026-09-25 (10 total):
-#   8x 10TB SAS (backup pool - currently the ONLY copy of the data):
-#     7GJ310BK, 7PK6P6GC, 7PK85E1G, 7PKAW5HG, ZRT0L58H0000W3257EXA,
-#     ZRT0L5F80000W3257EK1, ZRT0L60A0000W325RR1P, ZRT0L66Z0000W324NTT8
-#   2x 4TB SATA (boot pool): WCK44PKZ, WD-WX62D215AJHF
-#   SAS drives report a grown-defect count instead of ATA sector attributes.
+# ---------------------------------------------------------------------------
 
 - id: truenasty_smart_health_failed
   alias: "TrueNasty: disk SMART health or self-test FAILED"
   description: >-
     Any drive whose firmware reports failure, or whose last self-test failed.
-    Matches every disk_*_smart_ok / disk_*_selftest_ok sensor by pattern, so
-    newly installed drives are covered automatically.
+    Matches every disk health entity by pattern - both the legacy welded ids and
+    the key-shaped ones - so newly installed drives are covered automatically.
   mode: single
   trigger:
     - platform: template
       value_template: >-
         {{ states.sensor
            | selectattr('entity_id', 'search',
-                        '^sensor\.truenasty_disk_.*_(smart_ok|selftest_ok)$')
+                        '^sensor\.truenasty_disk_.*_(smart_ok|self_?test_ok)(_\d+)?$')
            | selectattr('state', 'in', ['0', '0.0'])
            | list | count > 0 }}
   action:
@@ -58,7 +58,7 @@
         failing: >-
           {{ states.sensor
              | selectattr('entity_id', 'search',
-                          '^sensor\.truenasty_disk_.*_(smart_ok|selftest_ok)$')
+                          '^sensor\.truenasty_disk_.*_(smart_ok|self_?test_ok)(_\d+)?$')
              | selectattr('state', 'in', ['0', '0.0'])
              | map(attribute='name') | list | join(', ') }}
     - service: persistent_notification.create
@@ -80,24 +80,28 @@
   trigger:
     - platform: state
       entity_id:
-        # 8x 10TB SAS - grown defect list (the reallocated-sector equivalent)
-        - sensor.truenasty_disk_7gj310bk_defects
-        - sensor.truenasty_disk_7pk6p6gc_defects
-        - sensor.truenasty_disk_7pk85e1g_defects
-        - sensor.truenasty_disk_7pkaw5hg_defects
-        - sensor.truenasty_disk_zrt0l58h0000w3257exa_defects
-        - sensor.truenasty_disk_zrt0l5f80000w3257ek1_defects
-        - sensor.truenasty_disk_zrt0l60a0000w325rr1p_defects
-        - sensor.truenasty_disk_zrt0l66z0000w324ntt8_defects
-        # 2x 4TB SATA boot drives - ATA attributes
-        - sensor.truenasty_disk_wck44pkz_crc_err
-        - sensor.truenasty_disk_wck44pkz_pending
-        - sensor.truenasty_disk_wck44pkz_realloc
-        - sensor.truenasty_disk_wck44pkz_uncorrect
-        - sensor.truenasty_disk_wd_wx62d215ajhf_crc_err
-        - sensor.truenasty_disk_wd_wx62d215ajhf_pending
-        - sensor.truenasty_disk_wd_wx62d215ajhf_realloc
-        - sensor.truenasty_disk_wd_wx62d215ajhf_uncorrect
+        # 8x 10TB SAS - grown defect list (the reallocated-sector equivalent).
+        # Comment gives the real drive; the sdX in the id is meaningless.
+        - sensor.truenasty_disk_sda_grown_defects   # 7PK6P6GC
+        - sensor.truenasty_disk_sdb_grown_defects   # 7GJ310BK
+        - sensor.truenasty_disk_sde_grown_defects   # ZRT0L5F80000W3257EK1
+        - sensor.truenasty_disk_sdf_grown_defects   # 7PKAW5HG
+        - sensor.truenasty_disk_sdh_grown_defects   # ZRT0L66Z0000W324NTT8
+        - sensor.truenasty_disk_sdj_grown_defects   # ZRT0L60A0000W325RR1P
+        - sensor.truenasty_disk_sdk_grown_defects   # ZRT0L58H0000W3257EXA
+        - sensor.truenasty_disk_sdl_grown_defects   # 7PK85E1G
+        # 4TB SATA boot drive WCK44PKZ - ATA attributes
+        - sensor.truenasty_disk_sdm_crc_errors
+        - sensor.truenasty_disk_sdm_pending_sectors
+        - sensor.truenasty_disk_sdm_reallocated_sectors
+        - sensor.truenasty_disk_sdm_uncorrectable_sectors
+        # 4TB SATA WD-WX62D215AJHF - the failing replacement drive.
+        # NOTE: its counter ids share the sdj letter with ZRT0L60A's defects
+        # entity above. Different suffixes, different drives.
+        - sensor.truenasty_disk_sdj_crc_errors
+        - sensor.truenasty_disk_sdj_pending_sectors
+        - sensor.truenasty_disk_sdj_reallocated_sectors
+        - sensor.truenasty_disk_sdj_uncorrectable_sectors
   condition:
     - condition: template
       value_template: >-
@@ -127,6 +131,7 @@
     - platform: numeric_state
       below: 1
       entity_id:
+        # These two ids are verified to exist and match.
         - sensor.truenasty_pool_backup_healthy
         - sensor.truenasty_pool_boot_pool_healthy
   action:
