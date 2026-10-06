@@ -245,6 +245,34 @@ announcement type is switched off, the daemon is meant to be down and it is left
 alone. Verify from a Mac with `dns-sd -B _smb._tcp local` — a `/etc/hosts` entry
 masks a plain name lookup, but it cannot fake a service browse.
 
+## TrueNAS: imaging the boot pool onto a data pool
+
+`truenas/boot-backup.sh` images the boot pool onto `/mnt/backup/bootbackup`:
+a recursive `zfs send` of a snapshot (consistent, unlike `dd` of a live pool),
+the EFI and BIOS-boot partitions, the GPT, and `freenas-v1.db` + `pwenc_secret`.
+It verifies the stream with `zstreamdump`, writes a `RESTORE.md`, and keeps the
+snapshot so later runs can be incremental. Pass a previous stamp as `$1` to
+resume — an existing snapshot and image are reused rather than redone.
+
+```bash
+sudo systemd-run --unit=bootbak --collect bash /path/to/boot-backup.sh
+tail -f /mnt/backup/bootbackup/boot-backup-*.log
+```
+
+TrueNAS 26 has `tmux` and `systemd-run` but **no `screen`**. A 4TB boot drive
+holding ~4GB of pool compresses to about 2.2GB and the whole run takes minutes.
+
+Two traps this script exists to document:
+
+- **Never resolve the boot device from the first `/dev/sdX` in `zpool status`.**
+  A faulted member keeps printing its last known path (`13557137303570482368
+  UNAVAIL ... was /dev/sdn3`) above the live one, so the obvious `grep` picks a
+  device that no longer exists. Match on the member whose state is `ONLINE`.
+- **Never put `-F` in a verification step.** `zfs receive -nv -F -d <pool>` is a
+  force-overwrite with a dry-run flag in front of it; one careless edit removing
+  `-n` aims it at the pool you are protecting. `zstreamdump` validates the
+  stream's checksums without touching any pool at all.
+
 ## Fan control (Dell iDRAC, IPMI)
 
 `fan_controller.py` is an optional companion that drives a server's chassis fans
