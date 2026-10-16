@@ -978,8 +978,7 @@ def read_filesystems(mounts: list[str]) -> list[Reading]:
 # announces a key exactly once per process: if a retained config is removed at
 # the broker — a cleanup, a broker reinstall, a lost retained store — the entity
 # vanishes from Home Assistant while the state topic keeps updating, and nothing
-# brings it back until the agent restarts. That happened on 2026-10-16 to two
-# selftest_ok sensors and was invisible from this side.
+# brings it back until the agent restarts.
 REANNOUNCE_SECONDS = 3600
 
 
