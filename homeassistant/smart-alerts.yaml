@@ -1,4 +1,9 @@
-# SMART disk alerts for the TrueNasty (192.168.4.111) server-monitor sensors.
+# SMART disk alerts for the TrueNasty server-monitor sensors.
+#
+# TrueNasty is now a VM (192.168.4.34) on the Proxmox host `tank`, owning the
+# four 28TB drives through a passed-through SATA controller. The old box's 8x10TB
+# entities are gone from this list - purge them in Home Assistant, or they will
+# sit there showing their last values forever (see the note on stale sensors).
 #
 # Three automations:
 #   1. Drive reports FAILURE      -> SMART health or a self-test failed: act now
@@ -84,25 +89,27 @@
   trigger:
     - platform: state
       entity_id:
-        # 8x 10TB SAS - grown defect list (the reallocated-sector equivalent)
-        - sensor.truenasty_disk_7gj310bk_defects
-        - sensor.truenasty_disk_7pk6p6gc_defects
-        - sensor.truenasty_disk_7pk85e1g_defects
-        - sensor.truenasty_disk_7pkaw5hg_defects
-        - sensor.truenasty_disk_zrt0l58h0000w3257exa_defects
-        - sensor.truenasty_disk_zrt0l5f80000w3257ek1_defects
-        - sensor.truenasty_disk_zrt0l60a0000w325rr1p_defects
-        - sensor.truenasty_disk_zrt0l66z0000w324ntt8_defects
-        # 4TB SATA boot drive WCK44PKZ - ATA attributes
-        - sensor.truenasty_disk_wck44pkz_crc_err
-        - sensor.truenasty_disk_wck44pkz_pending
-        - sensor.truenasty_disk_wck44pkz_realloc
-        - sensor.truenasty_disk_wck44pkz_uncorrect
-        # 4TB SATA WD-WX62D215AJHF - the failing replacement drive
-        - sensor.truenasty_disk_wd_wx62d215ajhf_crc_err
-        - sensor.truenasty_disk_wd_wx62d215ajhf_pending
-        - sensor.truenasty_disk_wd_wx62d215ajhf_realloc
-        - sensor.truenasty_disk_wd_wx62d215ajhf_uncorrect
+        # 4x 28TB SATA (ST28000NM000C) in the `data` raidz1. SATA, so ATA
+        # attributes rather than the SAS grown-defect list.
+        - sensor.truenasty_disk_zxa0kss6_crc_err
+        - sensor.truenasty_disk_zxa0kss6_pending
+        - sensor.truenasty_disk_zxa0kss6_realloc
+        - sensor.truenasty_disk_zxa0kss6_uncorrect
+        # ZXA0LAEB: the drive that silently corrupted reads on two independent
+        # machines. Its crc_err sits at 49 from the Aug 2026 cable fault and has
+        # been frozen since - an INCREASE here is the signal, not the value.
+        - sensor.truenasty_disk_zxa0laeb_crc_err
+        - sensor.truenasty_disk_zxa0laeb_pending
+        - sensor.truenasty_disk_zxa0laeb_realloc
+        - sensor.truenasty_disk_zxa0laeb_uncorrect
+        - sensor.truenasty_disk_zxa0m067_crc_err
+        - sensor.truenasty_disk_zxa0m067_pending
+        - sensor.truenasty_disk_zxa0m067_realloc
+        - sensor.truenasty_disk_zxa0m067_uncorrect
+        - sensor.truenasty_disk_zxa0pf3d_crc_err
+        - sensor.truenasty_disk_zxa0pf3d_pending
+        - sensor.truenasty_disk_zxa0pf3d_realloc
+        - sensor.truenasty_disk_zxa0pf3d_uncorrect
   condition:
     - condition: template
       value_template: >-
@@ -132,8 +139,9 @@
     - platform: numeric_state
       below: 1
       entity_id:
-        # These two ids are verified to exist and match.
-        - sensor.truenasty_pool_backup_healthy
+        # `data` is the 4x28TB raidz1 holding everything; boot-pool is the VM's
+        # own 32GB virtual disk. Verified publishing 2026-10-16.
+        - sensor.truenasty_pool_data_healthy
         - sensor.truenasty_pool_boot_pool_healthy
   action:
     - service: persistent_notification.create
