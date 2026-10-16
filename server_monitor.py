@@ -972,6 +972,17 @@ def read_filesystems(mounts: list[str]) -> list[Reading]:
 # MQTT publisher with Home Assistant discovery
 # --------------------------------------------------------------------------- #
 
+# How often to republish every discovery config, even for keys already
+# announced. Discovery configs are retained messages, so a publish is idempotent
+# and costs one small message per sensor per hour. Without this the agent
+# announces a key exactly once per process: if a retained config is removed at
+# the broker — a cleanup, a broker reinstall, a lost retained store — the entity
+# vanishes from Home Assistant while the state topic keeps updating, and nothing
+# brings it back until the agent restarts. That happened on 2026-10-16 to two
+# selftest_ok sensors and was invisible from this side.
+REANNOUNCE_SECONDS = 3600
+
+
 class Publisher:
     def __init__(self, cfg: dict, node: str):
         self.cfg = cfg
@@ -982,6 +993,7 @@ class Publisher:
         self.avail_topic = f"{self.base}/availability"
         self.discovery_prefix = cfg["discovery_prefix"]
         self._announced: set[str] = set()
+        self._announced_at = time.monotonic()
 
         mqtt_cfg = cfg["mqtt"]
         client_id = mqtt_cfg.get("client_id") or f"server-monitor-{self.node_slug}"
@@ -1072,6 +1084,10 @@ class Publisher:
         log.debug("Announced %s", object_id)
 
     def publish(self, readings: list[Reading]):
+        if time.monotonic() - self._announced_at >= REANNOUNCE_SECONDS:
+            self._announced.clear()
+            self._announced_at = time.monotonic()
+            log.debug("Re-announcing discovery configs")
         for reading in readings:
             self.announce(reading)
         state = {r.key: (round(r.value, 1) if isinstance(r.value, (int, float)) else r.value)
