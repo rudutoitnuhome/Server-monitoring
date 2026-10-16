@@ -44,12 +44,23 @@ TrueNAS SCALE, Plex); each host shows up as its own *device* in Home Assistant.
 >    not an installed automation. After pasting, confirm with Developer Tools →
 >    Template: `{{ states.automation | map(attribute='name') | list }}`.
 > 2. The entity ids those automations used never existed either. Entities
->    registered before the discovery payload pinned `object_id` got ids welded
+>    registered before the discovery payload pinned the entity id got ids welded
 >    from the friendly name at first discovery — `sensor.truenasty_disk_sdb_smart_ok`,
 >    with a `_2` suffix on collision — and that drive letter never updates, so
 >    serial 7PK6P6GC answers to `..._sda_smart_ok_2` while the kernel calls it
 >    sdd. **Only `unique_id` (`server_monitor_<node>_<key>`) is stable**; resolve
 >    entity ids through it rather than guessing from the key.
+>
+> **`default_entity_id`, not `object_id`, is what pins an entity id.** Home
+> Assistant's MQTT docs state plainly that "the `<object_id>` in the topic does
+> not influence the resulting `entity_id`", and as of 2026.10 the payload's
+> `object_id` is ignored as well — a discovery config sending only `object_id`
+> gets an entity id derived from the entity *name*. The payload now sends
+> `default_entity_id: sensor.<node>_<key>`, keeping `object_id` alongside it for
+> older installs. Note this only governs entities Home Assistant has never seen:
+> an existing registry entry keeps its id, and HA restores previously-used ids
+> for a known `unique_id` even after deletion, so changing ids on an established
+> install needs a rename pass on the HA side as well.
 >
 > The `Servers Failing Disks` template sensor in
 > `homeassistant/template-sensors.yaml` applies the same pattern to dashboards —

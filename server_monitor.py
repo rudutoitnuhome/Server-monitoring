@@ -405,7 +405,15 @@ def _read_one_disk(
         log.debug("%s is in standby, skipping", name)
         return []
 
-    serial = data.get("serial_number") or slugify(name)
+    # No serial means no stable identity: every key would be derived from the
+    # /dev letter, which moves. In practice these are virtual disks — a VM's
+    # QEMU scsi0, say — which have no SMART data worth publishing anyway, and
+    # which otherwise show up in Home Assistant as "Disk dev_sda" reading 0 °C
+    # forever. Skip them rather than create entities that can never be trusted.
+    serial = data.get("serial_number")
+    if not serial:
+        log.debug("%s reports no serial, skipping", name)
+        return []
     model = data.get("model_name") or data.get("device", {}).get("name", "")
     short = os.path.basename(name)
     prefix = f"disk_{slugify(str(serial))}"
@@ -1026,18 +1034,24 @@ class Publisher:
         topic = f"{self.discovery_prefix}/sensor/{object_id}/config"
         payload = {
             "name": reading.name,
-            # object_id pins the entity_id to sensor.<node>_<key>: deterministic,
-            # collision-free across hosts, and the same string the alert YAML and
-            # dashboards in homeassistant/ are written against.
+            # default_entity_id is what actually pins the entity_id to
+            # sensor.<node>_<key> — deterministic, collision-free across hosts,
+            # and the string the alert YAML and dashboards in homeassistant/ are
+            # written against. Home Assistant's MQTT docs are explicit: "The
+            # <object_id> in the topic does not influence the resulting
+            # entity_id; use default_entity_id if you need to control the
+            # entity_id." As of 2026.10 the payload's object_id is ignored too,
+            # so sending it alone produced ids derived from the entity NAME.
+            # object_id stays for older Home Assistant installs; it is harmless.
             #
-            # has_entity_name is deliberately NOT set. With it, Home Assistant
-            # builds the entity_id from the device name plus the entity name and
-            # ignores object_id, which produced ids welded to the kernel's drive
-            # letter at first discovery: sensor.truenasty_disk_sdj_smart_ok, plus
-            # a _2 suffix when that letter was already taken. Those ids then
-            # outlive the letter — a drive discovered as sdj answers to sdj
-            # forever, even once the kernel calls it sdd — so nothing written
-            # against them can be trusted. Only unique_id stayed stable.
+            # has_entity_name is deliberately NOT set either. With it, HA builds
+            # the entity_id from the device name plus the entity name, which
+            # welded ids to the kernel's drive letter at first discovery
+            # (sensor.truenasty_disk_sdj_smart_ok, plus a _2 suffix when that
+            # letter was taken). Those ids outlive the letter — a drive
+            # discovered as sdj answers to sdj forever, even once the kernel
+            # calls it sdd. Only unique_id was ever stable.
+            "default_entity_id": f"sensor.{object_id}",
             "object_id": object_id,
             "unique_id": f"server_monitor_{object_id}",
             "state_topic": self.state_topic,
